@@ -1,17 +1,37 @@
 /**
  * App Web de Asistencia con ArUco
  * Escanea markers ArUco, cuenta asistencia, evita duplicados y soporta zoom.
+ * Demo: 15 estudiantes, diccionario ARUCO (7x7 interno, 1024 códigos)
  */
+
+// ============================================
+// BASE DE DATOS LOCAL (DEMO - 15 ESTUDIANTES)
+// ============================================
+const listaEstudiantes = [
+    { id: 1,  rut: "12.345.601-K", curso: "3ro Medio B" },
+    { id: 2,  rut: "12.345.602-K", curso: "3ro Medio B" },
+    { id: 3,  rut: "12.345.603-K", curso: "3ro Medio B" },
+    { id: 4,  rut: "12.345.604-K", curso: "3ro Medio B" },
+    { id: 5,  rut: "12.345.605-K", curso: "3ro Medio B" },
+    { id: 6,  rut: "12.345.606-K", curso: "3ro Medio B" },
+    { id: 7,  rut: "12.345.607-K", curso: "3ro Medio B" },
+    { id: 8,  rut: "12.345.608-K", curso: "3ro Medio B" },
+    { id: 9,  rut: "12.345.609-K", curso: "3ro Medio B" },
+    { id: 10, rut: "12.345.610-K", curso: "3ro Medio B" },
+    { id: 11, rut: "12.345.611-K", curso: "3ro Medio B" },
+    { id: 12, rut: "12.345.612-K", curso: "3ro Medio B" },
+    { id: 13, rut: "12.345.613-K", curso: "3ro Medio B" },
+    { id: 14, rut: "12.345.614-K", curso: "3ro Medio B" },
+    { id: 15, rut: "12.345.615-K", curso: "3ro Medio B" }
+];
+
+// Mapa rápido: markerId -> estudiante
+const ESTUDIANTES_MAP = new Map();
+listaEstudiantes.forEach(est => ESTUDIANTES_MAP.set(est.id, est));
 
 // ============================================
 // CONFIGURACIÓN
 // ============================================
-const RUT_MAP = {
-    0: "18771609",
-    1: "11856556"
-};
-
-const COOLDOWN_MS = 5000;        // No repetir el mismo RUT por 5 segundos
 const DETECT_INTERVAL_MS = 200;  // Procesar frame cada 200ms
 const PROCESS_WIDTH = 640;       // Resolución de procesamiento (ancho)
 
@@ -26,10 +46,8 @@ let processCtx = null;
 let isScanning = false;
 let lastDetectTime = 0;
 
-// Asistencia
-const detectedRuts = new Set();
-const detectionLog = []; // { rut, timestamp, markerId }
-const cooldownMap = new Map(); // rut -> timestamp última detección
+// Asistencia acumulativa - Set de IDs de estudiantes ya registrados
+const asistenciaActual = new Set();
 
 // Zoom
 let zoomCapabilities = null;
@@ -67,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Crear detector con diccionario ARUCO (compatible con DICT_ARUCO_ORIGINAL de OpenCV)
+    // Crear detector con diccionario ARUCO (7x7 interno, compatible con DICT_ARUCO_ORIGINAL de OpenCV)
     detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
     // Canvas de procesamiento
@@ -201,43 +219,36 @@ function processFrame() {
 // ============================================
 
 function handleMarkerDetected(markerId) {
-    const rut = RUT_MAP[markerId];
-    if (!rut) return; // Marker no reconocido
+    // Buscar estudiante por ID del marker
+    const estudiante = ESTUDIANTES_MAP.get(markerId);
+    if (!estudiante) return; // Marker no reconocido (no está en nuestra base de datos)
 
-    const now = Date.now();
-
-    // Verificar cooldown (anti-duplicados)
-    const lastTime = cooldownMap.get(rut);
-    if (lastTime && (now - lastTime) < COOLDOWN_MS) {
-        return; // Aún en cooldown
+    // Verificar si ya fue registrado en esta sesión (anti-duplicados estricto)
+    if (asistenciaActual.has(markerId)) {
+        return; // Ya registrado, ignorar silenciosamente
     }
 
-    // Registrar detección
-    cooldownMap.set(rut, now);
-
-    const isNew = !detectedRuts.has(rut);
-    if (isNew) {
-        detectedRuts.add(rut);
-    }
+    // Registrar asistencia
+    asistenciaActual.add(markerId);
 
     const entry = {
-        rut: rut,
+        id: estudiante.id,
+        rut: estudiante.rut,
+        curso: estudiante.curso,
         markerId: markerId,
-        timestamp: now,
-        isNew: isNew
+        timestamp: Date.now()
     };
-    detectionLog.push(entry);
 
     // Actualizar UI
     updateCounter();
-    updateLastDetected(rut, isNew);
+    updateLastDetected(estudiante);
     addToList(entry);
     flashScreen();
 
     // Enviar a servidor (demo)
-    sendToServer(rut, isNew);
+    sendToServer(entry);
 
-    console.log(`Marker ${markerId} detectado -> RUT ${rut} (${isNew ? 'NUEVO' : 'ya registrado'})`);
+    console.log(`✅ Marker ${markerId} detectado -> ${estudiante.rut} (${estudiante.curso})`);
 }
 
 // ============================================
@@ -245,13 +256,11 @@ function handleMarkerDetected(markerId) {
 // ============================================
 
 function updateCounter() {
-    elCounter.textContent = detectedRuts.size;
+    elCounter.textContent = asistenciaActual.size;
 }
 
-function updateLastDetected(rut, isNew) {
-    const text = isNew
-        ? `✅ RUT ${rut} registrado`
-        : `🔄 RUT ${rut} (ya estaba)`;
+function updateLastDetected(estudiante) {
+    const text = `✅ ${estudiante.rut} - ${estudiante.curso}`;
     elLastDetected.textContent = text;
     elLastDetected.classList.add('detected');
 
@@ -269,7 +278,10 @@ function addToList(entry) {
     });
 
     li.innerHTML = `
-        <span class="rut">${entry.rut}</span>
+        <div class="estudiante-info">
+            <span class="rut">${entry.rut}</span>
+            <span class="curso">${entry.curso}</span>
+        </div>
         <span class="time">${timeStr}</span>
     `;
 
@@ -291,9 +303,7 @@ function toggleList() {
 function clearAttendance() {
     if (!confirm('¿Limpiar toda la lista de asistencia?')) return;
 
-    detectedRuts.clear();
-    detectionLog.length = 0;
-    cooldownMap.clear();
+    asistenciaActual.clear();
     elAttendanceList.innerHTML = '';
     elCounter.textContent = '0';
     elLastDetected.textContent = 'Esperando...';
@@ -369,15 +379,17 @@ async function applyZoom(value) {
 // ENVÍO A SERVIDOR (DEMO)
 // ============================================
 
-function sendToServer(rut, isNew) {
+function sendToServer(entry) {
     // ============================================
     // TODO: Implementar integración con servidor
     // ============================================
 
     const payload = {
-        rut: rut,
-        timestamp: new Date().toISOString(),
-        isNew: isNew,
+        id: entry.id,
+        rut: entry.rut,
+        curso: entry.curso,
+        markerId: entry.markerId,
+        timestamp: new Date(entry.timestamp).toISOString(),
         device: navigator.userAgent
     };
 

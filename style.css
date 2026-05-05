@@ -296,9 +296,20 @@ html, body {
     animation: slideIn 0.3s ease;
 }
 
+#attendance-list li .estudiante-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
 #attendance-list li .rut {
     font-weight: 600;
     color: #58a6ff;
+}
+
+#attendance-list li .curso {
+    font-size: 0.75rem;
+    color: #8b949e;
 }
 
 #attendance-list li .time {

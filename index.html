@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Escáner de Asistencia - ArUco</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Pantalla de inicio -->
+        <div id="start-screen" class="screen active">
+            <div class="start-content">
+                <h1>📋 Control de Asistencia</h1>
+                <p>Escanea los códigos ArUco para registrar asistencia</p>
+                <button id="btn-start" class="btn-primary">Iniciar Cámara</button>
+                <div id="error-msg" class="error hidden"></div>
+            </div>
+        </div>
+
+        <!-- Pantalla de escaneo -->
+        <div id="scanner-screen" class="screen">
+            <!-- Video de cámara -->
+            <video id="video" autoplay playsinline muted></video>
+
+            <!-- Canvas oculto para procesamiento -->
+            <canvas id="process-canvas"></canvas>
+
+            <!-- Overlay visual -->
+            <div id="overlay">
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+                <div class="center-line h"></div>
+                <div class="center-line v"></div>
+            </div>
+
+            <!-- Panel superior: Contador y estado -->
+            <div id="top-panel">
+                <div class="counter-box">
+                    <span class="counter-label">Asistencia</span>
+                    <span id="counter" class="counter-value">0</span>
+                </div>
+                <div id="last-detected" class="last-detected">Esperando...</div>
+            </div>
+
+            <!-- Panel de zoom -->
+            <div id="zoom-panel">
+                <button id="zoom-out" class="zoom-btn">−</button>
+                <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1">
+                <button id="zoom-in" class="zoom-btn">+</button>
+                <span id="zoom-value">1.0x</span>
+            </div>
+
+            <!-- Panel lateral: Lista de asistencia -->
+            <div id="side-panel">
+                <div class="panel-header">
+                    <span>📋 Registrados</span>
+                    <button id="btn-clear" class="btn-small">Limpiar</button>
+                </div>
+                <ul id="attendance-list"></ul>
+            </div>
+
+            <!-- Botón para alternar lista -->
+            <button id="btn-toggle-list" class="btn-fab">📋</button>
+
+            <!-- Flash de detección -->
+            <div id="flash"></div>
+        </div>
+    </div>
+
+    <!-- Librerías js-aruco2 desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/js-aruco2@2.0.0/src/cv.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-aruco2@2.0.0/src/aruco.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

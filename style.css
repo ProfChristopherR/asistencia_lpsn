@@ -43,10 +43,45 @@ html, body {
     color: #58a6ff;
 }
 
-.start-content p {
-    font-size: 1.1rem;
+.start-content .subtitle {
+    font-size: 1.3rem;
+    color: #58a6ff;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.start-content .description {
+    font-size: 1rem;
     color: #8b949e;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Selector de curso */
+.curso-selector {
+    margin-bottom: 1.5rem;
+    text-align: left;
+    background: rgba(22, 27, 34, 0.8);
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+}
+
+.curso-selector label {
+    display: block;
+    font-size: 0.9rem;
+    color: #c9d1d9;
+    margin-bottom: 0.5rem;
+}
+
+.curso-selector select {
+    width: 100%;
+    padding: 0.8rem;
+    font-size: 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    background: #0d1117;
+    color: #fff;
+    cursor: pointer;
 }
 
 .btn-primary {
@@ -149,8 +184,30 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.8rem 1rem;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+    padding: 0.6rem 1rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    gap: 0.8rem;
+}
+
+.curso-activo-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.curso-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8b949e;
+}
+
+.curso-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #58a6ff;
+    line-height: 1.2;
 }
 
 .counter-box {
@@ -167,19 +224,19 @@ html, body {
 }
 
 .counter-value {
-    font-size: 2.2rem;
+    font-size: 2rem;
     font-weight: 800;
     color: #3fb950;
     line-height: 1;
 }
 
 .last-detected {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #c9d1d9;
     background: rgba(0,0,0,0.5);
     padding: 0.4rem 0.8rem;
     border-radius: 20px;
-    max-width: 50%;
+    max-width: 45%;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -302,9 +359,16 @@ html, body {
     gap: 0.15rem;
 }
 
+#attendance-list li .num-lista {
+    font-weight: 800;
+    color: #3fb950;
+    font-size: 1rem;
+}
+
 #attendance-list li .rut {
     font-weight: 600;
     color: #58a6ff;
+    font-size: 0.9rem;
 }
 
 #attendance-list li .curso {

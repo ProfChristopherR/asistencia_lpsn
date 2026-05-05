@@ -1,39 +1,65 @@
 /**
- * App Web de Asistencia con ArUco
- * Escanea markers ArUco, cuenta asistencia, evita duplicados y soporta zoom.
- * Demo: 15 estudiantes, diccionario ARUCO (7x7 interno, 1024 códigos)
+ * App Web de Asistencia con ArUco - Metodo "Numero de Lista"
+ * 
+ * Arquitectura:
+ * - Solo 55 codigos ArUco (IDs 1-55) pegados en los bancos
+ * - El profesor selecciona el curso ANTES de escanear
+ * - La app cruza: markerId (numero de lista) + curso seleccionado = alumno unico
+ * 
+ * Esto permite cubrir 2,500+ alumnos con solo 55 codigos fisicos.
  */
 
 // ============================================
-// BASE DE DATOS LOCAL (DEMO - 15 ESTUDIANTES)
+// BASE DE DATOS LOCAL (DEMO)
 // ============================================
-const listaEstudiantes = [
-    { id: 1,  rut: "12.345.601-K", curso: "3ro Medio B" },
-    { id: 2,  rut: "12.345.602-K", curso: "3ro Medio B" },
-    { id: 3,  rut: "12.345.603-K", curso: "3ro Medio B" },
-    { id: 4,  rut: "12.345.604-K", curso: "3ro Medio B" },
-    { id: 5,  rut: "12.345.605-K", curso: "3ro Medio B" },
-    { id: 6,  rut: "12.345.606-K", curso: "3ro Medio B" },
-    { id: 7,  rut: "12.345.607-K", curso: "3ro Medio B" },
-    { id: 8,  rut: "12.345.608-K", curso: "3ro Medio B" },
-    { id: 9,  rut: "12.345.609-K", curso: "3ro Medio B" },
-    { id: 10, rut: "12.345.610-K", curso: "3ro Medio B" },
-    { id: 11, rut: "12.345.611-K", curso: "3ro Medio B" },
-    { id: 12, rut: "12.345.612-K", curso: "3ro Medio B" },
-    { id: 13, rut: "12.345.613-K", curso: "3ro Medio B" },
-    { id: 14, rut: "12.345.614-K", curso: "3ro Medio B" },
-    { id: 15, rut: "12.345.615-K", curso: "3ro Medio B" }
+// En produccion, esto vendria de una API o JSON externo
+const CURSOS = [
+    { code: "3MB", nombre: "3ro Medio B" },
+    { code: "4MA", nombre: "4to Medio A" },
+    { code: "2MC", nombre: "2do Medio C" }
 ];
 
-// Mapa rápido: markerId -> estudiante
-const ESTUDIANTES_MAP = new Map();
-listaEstudiantes.forEach(est => ESTUDIANTES_MAP.set(est.id, est));
+// Mapa de alumnos por curso: cursoCode -> { numLista -> alumno }
+const ALUMNOS_DB = {
+    "3MB": {
+        1:  { rut: "12.345.601-K", nombre: "Ana Garcia" },
+        2:  { rut: "12.345.602-K", nombre: "Benito Lopez" },
+        3:  { rut: "12.345.603-K", nombre: "Carla Mendez" },
+        4:  { rut: "12.345.604-K", nombre: "Diego Torres" },
+        5:  { rut: "12.345.605-K", nombre: "Elena Ruiz" },
+        6:  { rut: "12.345.606-K", nombre: "Felipe Soto" },
+        7:  { rut: "12.345.607-K", nombre: "Gabriela Diaz" },
+        8:  { rut: "12.345.608-K", nombre: "Hugo Martinez" },
+        9:  { rut: "12.345.609-K", nombre: "Isabel Castro" },
+        10: { rut: "12.345.610-K", nombre: "Juan Perez" },
+        11: { rut: "12.345.611-K", nombre: "Laura Vargas" },
+        12: { rut: "12.345.612-K", nombre: "Mario Silva" },
+        13: { rut: "12.345.613-K", nombre: "Natalia Rojas" },
+        14: { rut: "12.345.614-K", nombre: "Oscar Fuentes" },
+        15: { rut: "12.345.615-K", nombre: "Patricia Morales" }
+    },
+    "4MA": {
+        1:  { rut: "13.456.701-K", nombre: "Alberto Nunez" },
+        2:  { rut: "13.456.702-K", nombre: "Beatriz Ortega" },
+        3:  { rut: "13.456.703-K", nombre: "Cesar Herrera" },
+        4:  { rut: "13.456.704-K", nombre: "Diana Ibarra" },
+        5:  { rut: "13.456.705-K", nombre: "Esteban Bravo" }
+    },
+    "2MC": {
+        1:  { rut: "11.234.501-K", nombre: "Fernanda Arias" },
+        2:  { rut: "11.234.502-K", nombre: "Gustavo Paredes" },
+        3:  { rut: "11.234.503-K", nombre: "Helena Campos" },
+        4:  { rut: "11.234.504-K", nombre: "Ignacio Reyes" },
+        5:  { rut: "11.234.505-K", nombre: "Julia Figueroa" }
+    }
+};
 
 // ============================================
-// CONFIGURACIÓN
+// CONFIGURACION
 // ============================================
-const DETECT_INTERVAL_MS = 200;  // Procesar frame cada 200ms
-const PROCESS_WIDTH = 640;       // Resolución de procesamiento (ancho)
+const DETECT_INTERVAL_MS = 200;
+const PROCESS_WIDTH = 640;
+const MAX_NUM_LISTA = 55; // Maximo numero de lista (bancos en el aula)
 
 // ============================================
 // ESTADO
@@ -46,10 +72,9 @@ let processCtx = null;
 let isScanning = false;
 let lastDetectTime = 0;
 
-// Asistencia acumulativa - Set de IDs de estudiantes ya registrados
-const asistenciaActual = new Set();
+let cursoSeleccionado = null; // Codigo del curso actual (ej: "3MB")
+let asistenciaActual = new Set(); // Set de "numLista" ya registrados en esta sesion
 
-// Zoom
 let zoomCapabilities = null;
 let currentZoom = 1;
 
@@ -74,23 +99,24 @@ const elZoomOut = document.getElementById('zoom-out');
 const elFlash = document.getElementById('flash');
 
 // ============================================
-// INICIALIZACIÓN
+// INICIALIZACION
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar que js-aruco2 cargó
     if (typeof AR === 'undefined' || typeof AR.Detector === 'undefined') {
-        showError('Error: No se pudo cargar la librería de detección ArUco. Verifica tu conexión a internet.');
+        showError('Error: No se pudo cargar la libreria de deteccion ArUco. Verifica tu conexion a internet.');
         elBtnStart.disabled = true;
         return;
     }
 
-    // Crear detector con diccionario ARUCO (7x7 interno, compatible con DICT_ARUCO_ORIGINAL de OpenCV)
+    // Crear detector con diccionario ARUCO (DICT_ARUCO_ORIGINAL de OpenCV)
     detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
-    // Canvas de procesamiento
     processCanvas = document.getElementById('process-canvas');
     processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Construir selector de curso
+    buildCursoSelector();
 
     // Event listeners
     elBtnStart.addEventListener('click', startCamera);
@@ -100,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
     elZoomIn.addEventListener('click', () => adjustZoom(0.5));
     elZoomOut.addEventListener('click', () => adjustZoom(-0.5));
 
-    // Cerrar panel al tocar fuera
     document.addEventListener('click', (e) => {
         if (elSidePanel.classList.contains('open') &&
             !elSidePanel.contains(e.target) &&
@@ -111,17 +136,51 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================
+// SELECTOR DE CURSO
+// ============================================
+
+function buildCursoSelector() {
+    const container = document.createElement('div');
+    container.className = 'curso-selector';
+    container.innerHTML = `
+        <label for="curso-select">Selecciona el curso:</label>
+        <select id="curso-select">
+            <option value="">-- Elige un curso --</option>
+            ${CURSOS.map(c => `<option value="${c.code}">${c.nombre}</option>`).join('')}
+        </select>
+    `;
+
+    // Insertar antes del boton de inicio
+    const startContent = document.querySelector('.start-content');
+    startContent.insertBefore(container, elBtnStart);
+
+    // Listener para cambio de curso
+    document.getElementById('curso-select').addEventListener('change', (e) => {
+        cursoSeleccionado = e.target.value;
+        if (cursoSeleccionado) {
+            console.log('Curso seleccionado:', cursoSeleccionado);
+        }
+    });
+}
+
+// ============================================
 // CÁMARA
 // ============================================
 
 async function startCamera() {
+    // Validar que se haya seleccionado un curso
+    if (!cursoSeleccionado) {
+        showError('Por favor selecciona un curso antes de iniciar la camara.');
+        return;
+    }
+
     elBtnStart.disabled = true;
     elBtnStart.textContent = 'Iniciando...';
 
     try {
         const constraints = {
             video: {
-                facingMode: 'environment', // Cámara trasera preferida
+                facingMode: 'environment',
                 width: { ideal: 1920 },
                 height: { ideal: 1080 }
             },
@@ -130,10 +189,8 @@ async function startCamera() {
 
         videoStream = await navigator.mediaDevices.getUserMedia(constraints);
         videoTrack = videoStream.getVideoTracks()[0];
-
         elVideo.srcObject = videoStream;
 
-        // Esperar a que el video esté listo
         await new Promise((resolve) => {
             elVideo.onloadedmetadata = () => {
                 elVideo.play();
@@ -141,42 +198,42 @@ async function startCamera() {
             };
         });
 
-        // Configurar canvas de procesamiento
         const aspect = elVideo.videoHeight / elVideo.videoWidth;
         processCanvas.width = PROCESS_WIDTH;
         processCanvas.height = Math.round(PROCESS_WIDTH * aspect);
 
-        // Detectar capacidades de zoom
         detectZoomCapabilities();
 
-        // Cambiar pantalla
+        // Mostrar curso seleccionado en el panel superior
+        const cursoNombre = CURSOS.find(c => c.code === cursoSeleccionado)?.nombre || cursoSeleccionado;
+        document.getElementById('curso-activo').textContent = cursoNombre;
+
         elStartScreen.classList.remove('active');
         elScannerScreen.classList.add('active');
 
-        // Iniciar loop de detección
         isScanning = true;
         requestAnimationFrame(detectionLoop);
 
-        console.log('Cámara iniciada. Resolución:', elVideo.videoWidth, 'x', elVideo.videoHeight);
+        console.log('Camara iniciada. Curso:', cursoSeleccionado);
 
     } catch (err) {
-        console.error('Error al iniciar cámara:', err);
-        let msg = 'No se pudo acceder a la cámara.';
+        console.error('Error al iniciar camara:', err);
+        let msg = 'No se pudo acceder a la camara.';
         if (err.name === 'NotAllowedError') {
-            msg = 'Permiso de cámara denegado. Por favor permite el acceso en la configuración de tu navegador.';
+            msg = 'Permiso de camara denegado.';
         } else if (err.name === 'NotFoundError') {
-            msg = 'No se encontró una cámara disponible.';
+            msg = 'No se encontro una camara disponible.';
         } else if (err.name === 'NotReadableError') {
-            msg = 'La cámara está siendo usada por otra aplicación.';
+            msg = 'La camara esta siendo usada por otra aplicacion.';
         }
         showError(msg);
         elBtnStart.disabled = false;
-        elBtnStart.textContent = 'Iniciar Cámara';
+        elBtnStart.textContent = 'Iniciar Camara';
     }
 }
 
 // ============================================
-// LOOP DE DETECCIÓN
+// LOOP DE DETECCION
 // ============================================
 
 function detectionLoop() {
@@ -187,30 +244,24 @@ function detectionLoop() {
         lastDetectTime = now;
         processFrame();
     }
-
     requestAnimationFrame(detectionLoop);
 }
 
 function processFrame() {
     if (elVideo.readyState !== elVideo.HAVE_ENOUGH_DATA) return;
 
-    // Dibujar frame actual en canvas de procesamiento (escalado)
     processCtx.drawImage(elVideo, 0, 0, processCanvas.width, processCanvas.height);
-
-    // Obtener ImageData
     const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
 
-    // Detectar markers
     try {
         const markers = detector.detect(imageData);
-
         if (markers && markers.length > 0) {
             markers.forEach(marker => {
                 handleMarkerDetected(marker.id);
             });
         }
     } catch (e) {
-        // Silenciar errores ocasionales de procesamiento
+        // Silenciar errores ocasionales
     }
 }
 
@@ -219,36 +270,55 @@ function processFrame() {
 // ============================================
 
 function handleMarkerDetected(markerId) {
-    // Buscar estudiante por ID del marker
-    const estudiante = ESTUDIANTES_MAP.get(markerId);
-    if (!estudiante) return; // Marker no reconocido (no está en nuestra base de datos)
+    // Validar rango: solo aceptamos IDs 1-55 (numeros de lista)
+    if (markerId < 1 || markerId > MAX_NUM_LISTA) {
+        return; // Marker fuera de rango, ignorar
+    }
 
-    // Verificar si ya fue registrado en esta sesión (anti-duplicados estricto)
-    if (asistenciaActual.has(markerId)) {
+    const numLista = markerId;
+
+    // Buscar alumno en la base de datos: curso + numero de lista
+    const alumnosCurso = ALUMNOS_DB[cursoSeleccionado];
+    if (!alumnosCurso) {
+        console.warn('Curso no encontrado en DB:', cursoSeleccionado);
+        return;
+    }
+
+    const alumno = alumnosCurso[numLista];
+    if (!alumno) {
+        // Numero de lista sin alumno asignado en este curso
+        console.log(`Numero de lista ${numLista} no tiene alumno en ${cursoSeleccionado}`);
+        return;
+    }
+
+    // Anti-duplicados: verificar si ya fue registrado en esta sesion
+    const claveUnica = `${cursoSeleccionado}-${numLista}`;
+    if (asistenciaActual.has(claveUnica)) {
         return; // Ya registrado, ignorar silenciosamente
     }
 
     // Registrar asistencia
-    asistenciaActual.add(markerId);
+    asistenciaActual.add(claveUnica);
 
     const entry = {
-        id: estudiante.id,
-        rut: estudiante.rut,
-        curso: estudiante.curso,
-        markerId: markerId,
+        numLista: numLista,
+        rut: alumno.rut,
+        nombre: alumno.nombre,
+        curso: cursoSeleccionado,
+        cursoNombre: CURSOS.find(c => c.code === cursoSeleccionado)?.nombre || cursoSeleccionado,
         timestamp: Date.now()
     };
 
     // Actualizar UI
     updateCounter();
-    updateLastDetected(estudiante);
+    updateLastDetected(entry);
     addToList(entry);
     flashScreen();
 
     // Enviar a servidor (demo)
     sendToServer(entry);
 
-    console.log(`✅ Marker ${markerId} detectado -> ${estudiante.rut} (${estudiante.curso})`);
+    console.log(`Lista ${numLista} detectada -> ${alumno.nombre} (${alumno.rut})`);
 }
 
 // ============================================
@@ -259,8 +329,8 @@ function updateCounter() {
     elCounter.textContent = asistenciaActual.size;
 }
 
-function updateLastDetected(estudiante) {
-    const text = `✅ ${estudiante.rut} - ${estudiante.curso}`;
+function updateLastDetected(entry) {
+    const text = `Lista ${entry.numLista}: ${entry.nombre}`;
     elLastDetected.textContent = text;
     elLastDetected.classList.add('detected');
 
@@ -279,13 +349,13 @@ function addToList(entry) {
 
     li.innerHTML = `
         <div class="estudiante-info">
-            <span class="rut">${entry.rut}</span>
-            <span class="curso">${entry.curso}</span>
+            <span class="num-lista">N° ${entry.numLista}</span>
+            <span class="rut">${entry.nombre}</span>
+            <span class="curso">${entry.rut}</span>
         </div>
         <span class="time">${timeStr}</span>
     `;
 
-    // Insertar al principio
     elAttendanceList.insertBefore(li, elAttendanceList.firstChild);
 }
 
@@ -301,7 +371,7 @@ function toggleList() {
 }
 
 function clearAttendance() {
-    if (!confirm('¿Limpiar toda la lista de asistencia?')) return;
+    if (!confirm('Limpiar toda la lista de asistencia?')) return;
 
     asistenciaActual.clear();
     elAttendanceList.innerHTML = '';
@@ -320,25 +390,19 @@ function showError(msg) {
 
 function detectZoomCapabilities() {
     if (!videoTrack) return;
-
     try {
         zoomCapabilities = videoTrack.getCapabilities();
         if (zoomCapabilities.zoom) {
             const min = zoomCapabilities.zoom.min || 1;
             const max = zoomCapabilities.zoom.max || 10;
             const step = zoomCapabilities.zoom.step || 0.1;
-
             elZoomSlider.min = min;
             elZoomSlider.max = max;
             elZoomSlider.step = step;
             elZoomSlider.value = min;
             currentZoom = min;
-
-            console.log('Zoom soportado:', min, '-', max);
         } else {
-            // Zoom no soportado por este dispositivo/navegador
             document.getElementById('zoom-panel').style.display = 'none';
-            console.log('Zoom no soportado por este dispositivo');
         }
     } catch (e) {
         console.log('No se pudieron obtener capacidades de zoom');
@@ -346,13 +410,11 @@ function detectZoomCapabilities() {
 }
 
 function onZoomSlider(e) {
-    const value = parseFloat(e.target.value);
-    applyZoom(value);
+    applyZoom(parseFloat(e.target.value));
 }
 
 function adjustZoom(delta) {
     if (!zoomCapabilities || !zoomCapabilities.zoom) return;
-
     const newZoom = Math.max(
         zoomCapabilities.zoom.min,
         Math.min(zoomCapabilities.zoom.max, currentZoom + delta)
@@ -363,11 +425,8 @@ function adjustZoom(delta) {
 
 async function applyZoom(value) {
     if (!videoTrack) return;
-
     try {
-        await videoTrack.applyConstraints({
-            advanced: [{ zoom: value }]
-        });
+        await videoTrack.applyConstraints({ advanced: [{ zoom: value }] });
         currentZoom = value;
         elZoomValue.textContent = value.toFixed(1) + 'x';
     } catch (e) {
@@ -376,38 +435,30 @@ async function applyZoom(value) {
 }
 
 // ============================================
-// ENVÍO A SERVIDOR (DEMO)
+// ENVIO A SERVIDOR (DEMO)
 // ============================================
 
 function sendToServer(entry) {
-    // ============================================
-    // TODO: Implementar integración con servidor
-    // ============================================
-
     const payload = {
-        id: entry.id,
+        numLista: entry.numLista,
         rut: entry.rut,
-        curso: entry.curso,
-        markerId: entry.markerId,
+        nombre: entry.nombre,
+        cursoCode: entry.curso,
+        cursoNombre: entry.cursoNombre,
         timestamp: new Date(entry.timestamp).toISOString(),
         device: navigator.userAgent
     };
-
     console.log('[DEMO] Enviar al servidor:', payload);
 
-    // Ejemplo de cómo sería con fetch (descomentar cuando tengas servidor):
     /*
     fetch('https://tu-servidor.com/api/asistencia', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer TU_TOKEN_AQUI'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
-    .then(response => response.json())
-    .then(data => console.log('Servidor respondió:', data))
-    .catch(err => console.error('Error enviando a servidor:', err));
+    .then(r => r.json())
+    .then(data => console.log('Servidor respondio:', data))
+    .catch(err => console.error('Error:', err));
     */
 }
 

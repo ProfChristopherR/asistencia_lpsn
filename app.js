@@ -22,15 +22,15 @@ const CURSOS = [
 // Mapa de alumnos por curso: cursoCode -> { numLista -> alumno }
 const ALUMNOS_DB = {
     "3MB": {
-        1:  { rut: "12.345.601-K", nombre: "Ana Garcia" },
-        2:  { rut: "12.345.602-K", nombre: "Benito Lopez" },
-        3:  { rut: "12.345.603-K", nombre: "Carla Mendez" },
-        4:  { rut: "12.345.604-K", nombre: "Diego Torres" },
-        5:  { rut: "12.345.605-K", nombre: "Elena Ruiz" },
-        6:  { rut: "12.345.606-K", nombre: "Felipe Soto" },
-        7:  { rut: "12.345.607-K", nombre: "Gabriela Diaz" },
-        8:  { rut: "12.345.608-K", nombre: "Hugo Martinez" },
-        9:  { rut: "12.345.609-K", nombre: "Isabel Castro" },
+        1: { rut: "12.345.601-K", nombre: "Ana Garcia" },
+        2: { rut: "12.345.602-K", nombre: "Benito Lopez" },
+        3: { rut: "12.345.603-K", nombre: "Carla Mendez" },
+        4: { rut: "12.345.604-K", nombre: "Diego Torres" },
+        5: { rut: "12.345.605-K", nombre: "Elena Ruiz" },
+        6: { rut: "12.345.606-K", nombre: "Felipe Soto" },
+        7: { rut: "12.345.607-K", nombre: "Gabriela Diaz" },
+        8: { rut: "12.345.608-K", nombre: "Hugo Martinez" },
+        9: { rut: "12.345.609-K", nombre: "Isabel Castro" },
         10: { rut: "12.345.610-K", nombre: "Juan Perez" },
         11: { rut: "12.345.611-K", nombre: "Laura Vargas" },
         12: { rut: "12.345.612-K", nombre: "Mario Silva" },
@@ -39,18 +39,18 @@ const ALUMNOS_DB = {
         15: { rut: "12.345.615-K", nombre: "Patricia Morales" }
     },
     "4MA": {
-        1:  { rut: "13.456.701-K", nombre: "Alberto Nunez" },
-        2:  { rut: "13.456.702-K", nombre: "Beatriz Ortega" },
-        3:  { rut: "13.456.703-K", nombre: "Cesar Herrera" },
-        4:  { rut: "13.456.704-K", nombre: "Diana Ibarra" },
-        5:  { rut: "13.456.705-K", nombre: "Esteban Bravo" }
+        1: { rut: "13.456.701-K", nombre: "Alberto Nunez" },
+        2: { rut: "13.456.702-K", nombre: "Beatriz Ortega" },
+        3: { rut: "13.456.703-K", nombre: "Cesar Herrera" },
+        4: { rut: "13.456.704-K", nombre: "Diana Ibarra" },
+        5: { rut: "13.456.705-K", nombre: "Esteban Bravo" }
     },
     "2MC": {
-        1:  { rut: "11.234.501-K", nombre: "Fernanda Arias" },
-        2:  { rut: "11.234.502-K", nombre: "Gustavo Paredes" },
-        3:  { rut: "11.234.503-K", nombre: "Helena Campos" },
-        4:  { rut: "11.234.504-K", nombre: "Ignacio Reyes" },
-        5:  { rut: "11.234.505-K", nombre: "Julia Figueroa" }
+        1: { rut: "11.234.501-K", nombre: "Fernanda Arias" },
+        2: { rut: "11.234.502-K", nombre: "Gustavo Paredes" },
+        3: { rut: "11.234.503-K", nombre: "Helena Campos" },
+        4: { rut: "11.234.504-K", nombre: "Ignacio Reyes" },
+        5: { rut: "11.234.505-K", nombre: "Julia Figueroa" }
     }
 };
 
@@ -58,7 +58,7 @@ const ALUMNOS_DB = {
 // CONFIGURACION
 // ============================================
 const DETECT_INTERVAL_MS = 200;
-const PROCESS_WIDTH = 640;
+//const PROCESS_WIDTH = 640;
 const MAX_NUM_LISTA = 55; // Maximo numero de lista (bancos en el aula)
 
 // ============================================
@@ -198,9 +198,9 @@ async function startCamera() {
             };
         });
 
-        const aspect = elVideo.videoHeight / elVideo.videoWidth;
-        processCanvas.width = PROCESS_WIDTH;
-        processCanvas.height = Math.round(PROCESS_WIDTH * aspect);
+        // const aspect = elVideo.videoHeight / elVideo.videoWidth;
+        //processCanvas.width = PROCESS_WIDTH;
+        //processCanvas.height = Math.round(PROCESS_WIDTH * aspect);
 
         detectZoomCapabilities();
 
@@ -247,21 +247,66 @@ function detectionLoop() {
     requestAnimationFrame(detectionLoop);
 }
 
+// Referencias a los canvas al inicio de tu archivo (asegúrate de agregar la del overlay)
+const overlayCanvas = document.getElementById('overlay-canvas');
+const overlayCtx = overlayCanvas?.getContext('2d');
+
 function processFrame() {
     if (elVideo.readyState !== elVideo.HAVE_ENOUGH_DATA) return;
 
+    // Configurar máxima resolución
+    if (processCanvas.width !== elVideo.videoWidth || processCanvas.width === 0) {
+        processCanvas.width = elVideo.videoWidth;
+        processCanvas.height = elVideo.videoHeight;
+
+        // Sincronizar también la resolución del canvas visual
+        if (overlayCanvas) {
+            overlayCanvas.width = elVideo.videoWidth;
+            overlayCanvas.height = elVideo.videoHeight;
+        }
+    }
+
+    if (processCanvas.width === 0) return;
+
+    // Copiar frame para procesar
     processCtx.drawImage(elVideo, 0, 0, processCanvas.width, processCanvas.height);
     const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
+
+    // Limpiar el canvas visual en cada frame (borra cuadros viejos)
+    if (overlayCtx) {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
 
     try {
         const markers = detector.detect(imageData);
         if (markers && markers.length > 0) {
             markers.forEach(marker => {
+                // Registrar asistencia
                 handleMarkerDetected(marker.id);
+
+                // --- MAGIA VISUAL: DIBUJAR CUADRO VERDE ---
+                if (overlayCtx) {
+                    overlayCtx.lineWidth = 6; // Grosor de la línea
+                    overlayCtx.strokeStyle = "#3fb950"; // Verde estilo interfaz
+                    overlayCtx.beginPath();
+
+                    // Mover el "lápiz" a la primera esquina
+                    overlayCtx.moveTo(marker.corners[0].x, marker.corners[0].y);
+
+                    // Trazar línea hacia las otras 3 esquinas
+                    for (let i = 1; i < marker.corners.length; i++) {
+                        overlayCtx.lineTo(marker.corners[i].x, marker.corners[i].y);
+                    }
+
+                    // Cerrar el cuadrado volviendo al inicio y pintar
+                    overlayCtx.closePath();
+                    overlayCtx.stroke();
+                }
+                // ------------------------------------------
             });
         }
     } catch (e) {
-        // Silenciar errores ocasionales
+        // Silenciar errores de lectura
     }
 }
 

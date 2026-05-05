@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -7,6 +8,7 @@
     <title>Escaner de Asistencia - ArUco</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div id="app">
         <!-- Pantalla de inicio -->
@@ -24,6 +26,9 @@
         <div id="scanner-screen" class="screen">
             <!-- Video de camara -->
             <video id="video" autoplay playsinline muted></video>
+            <canvas id="overlay-canvas"></canvas>
+
+            <canvas id="process-canvas"></canvas>
 
             <!-- Canvas oculto para procesamiento -->
             <canvas id="process-canvas"></canvas>
@@ -81,4 +86,5 @@
     <script src="https://cdn.jsdelivr.net/npm/js-aruco2@2.0.0/src/aruco.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

@@ -99,23 +99,48 @@ async function getNiveles(turno) {
  */
 function procesarDatosHoja(values) {
     if (!values || values.length < 5) {
+        console.log('procesarDatosHoja: datos insuficientes, filas:', values?.length);
         return { cursos: [], alumnosPorCurso: {} };
     }
 
-    // values[0] = fila 1, values[1] = fila 2, etc.
+    console.log('procesarDatosHoja: total filas recibidas:', values.length);
+
     const alumnosPorCurso = {};
+    let filasProcesadas = 0;
+    let filasIgnoradas = 0;
 
     // Empezar desde la fila 5 (índice 4) que es donde están los datos
     for (let i = 4; i < values.length; i++) {
         const row = values[i];
-        if (!row || row.length < 4) continue;
+
+        // Log de las primeras filas para debug
+        if (i < 10) {
+            console.log(`Fila ${i + 1} (idx ${i}):`, row);
+        }
+
+        if (!row || row.length < 2) {
+            filasIgnoradas++;
+            continue;
+        }
 
         const curso = (row[0] || '').trim();
-        const numLista = parseInt(row[1], 10);
+        const numListaRaw = row[1];
+        const numLista = parseInt(numListaRaw, 10);
+
+        // Si no tiene curso o número de lista, saltar
+        if (!curso || isNaN(numLista)) {
+            filasIgnoradas++;
+            continue;
+        }
+
         const run = (row[2] || '').trim();
         const nombre = (row[3] || '').trim();
 
-        if (!curso || isNaN(numLista) || !nombre) continue;
+        // Si no tiene nombre, igual lo registramos (podría ser fila vacía)
+        if (!nombre) {
+            filasIgnoradas++;
+            continue;
+        }
 
         if (!alumnosPorCurso[curso]) {
             alumnosPorCurso[curso] = [];
@@ -127,9 +152,14 @@ function procesarDatosHoja(values) {
             nombre,
             rowIndex: i + 1 // 1-based para la API de Sheets
         });
+        filasProcesadas++;
     }
 
     const cursos = Object.keys(alumnosPorCurso).sort();
+    console.log('procesarDatosHoja: filas procesadas:', filasProcesadas, 'ignoradas:', filasIgnoradas, 'cursos:', cursos);
+    for (const c of cursos) {
+        console.log(`  Curso ${c}: ${alumnosPorCurso[c].length} alumnos`);
+    }
 
     return { cursos, alumnosPorCurso };
 }

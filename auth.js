@@ -9,7 +9,10 @@
 // CONFIGURACIÓN - EDITAR CON TU CLIENT ID
 // ============================================
 const GOOGLE_CLIENT_ID = '7364447610-7nk30untbp3o14go1ovskmpd91u16bvg.apps.googleusercontent.com';
-const GOOGLE_REDIRECT_URI = window.location.origin + window.location.pathname;
+// Normalizar redirect URI (asegurar que termine en /)
+let redirectPath = window.location.pathname;
+if (!redirectPath.endsWith('/')) redirectPath += '/';
+const GOOGLE_REDIRECT_URI = window.location.origin + redirectPath;
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
@@ -100,9 +103,9 @@ async function signInWithGoogle() {
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateState();
 
-    // Guardar verifier y state para validar al volver
-    sessionStorage.setItem('asistencia_code_verifier', codeVerifier);
-    sessionStorage.setItem('asistencia_state', state);
+    // Guardar verifier y state en localStorage (persiste entre redirects en todos los navegadores)
+    localStorage.setItem('asistencia_code_verifier', codeVerifier);
+    localStorage.setItem('asistencia_state', state);
 
     const params = new URLSearchParams({
         client_id: GOOGLE_CLIENT_ID,
@@ -140,15 +143,20 @@ async function handleAuthRedirect() {
     }
 
     // Validar state (CSRF protection)
-    const savedState = sessionStorage.getItem('asistencia_state');
+    const savedState = localStorage.getItem('asistencia_state');
+    const codeVerifier = localStorage.getItem('asistencia_code_verifier');
+    
+    console.log('OAuth redirect detectado. Code:', code ? 'presente' : 'no');
+    console.log('State recibido:', state, 'State guardado:', savedState);
+    console.log('Code verifier presente:', !!codeVerifier);
+    
     if (state !== savedState) {
-        console.error('State mismatch - posible ataque CSRF');
+        console.error('State mismatch. Recibido:', state, 'Guardado:', savedState);
         return { success: false, error: 'state_mismatch' };
     }
 
-    const codeVerifier = sessionStorage.getItem('asistencia_code_verifier');
     if (!codeVerifier) {
-        console.error('No se encontró code_verifier');
+        console.error('No se encontró code_verifier en localStorage');
         return { success: false, error: 'no_verifier' };
     }
 
@@ -178,9 +186,9 @@ async function handleAuthRedirect() {
         // Limpiar parámetros de URL (quitar ?code=...)
         window.history.replaceState({}, document.title, GOOGLE_REDIRECT_URI);
 
-        // Limpiar sessionStorage temporal
-        sessionStorage.removeItem('asistencia_code_verifier');
-        sessionStorage.removeItem('asistencia_state');
+        // Limpiar localStorage temporal
+        localStorage.removeItem('asistencia_code_verifier');
+        localStorage.removeItem('asistencia_state');
 
         // Obtener info del usuario
         await fetchUserInfo(data.access_token);

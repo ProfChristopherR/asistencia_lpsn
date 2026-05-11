@@ -99,11 +99,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (authResult.success && window.Auth.isAuthenticated()) {
         mostrarPantalla('turno');
-        window.Auth.renderLoginButton('login-button-container');
     } else {
         mostrarPantalla('login');
-        window.Auth.renderLoginButton('login-button-container');
     }
+
+    // Configurar callback para cuando el login sea exitoso
+    window.Auth.setLoginSuccessCallback(() => {
+        mostrarPantalla('turno');
+    });
+
+    // Renderizar botón de login
+    window.Auth.renderLoginButton('login-button-container');
 
     // Event listeners
     setupEventListeners();

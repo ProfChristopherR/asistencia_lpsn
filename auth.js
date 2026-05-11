@@ -1,56 +1,20 @@
 /**
- * auth.js - Módulo de Autenticación OAuth2 PKCE con Google
+ * auth.js - Autenticación con Google Identity Services (GIS)
  * 
- * Flujo Authorization Code Flow con PKCE (client-side, sin backend).
+ * Usa el botón de Google Sign-In que maneja todo el flujo OAuth2 internamente.
+ * No requiere Client Secret ni intercambio manual de code→token.
  * Compatible con GitHub Pages (SPA estática).
  */
 
 // ============================================
-// CONFIGURACIÓN - EDITAR CON TU CLIENT ID
+// CONFIGURACIÓN
 // ============================================
 const GOOGLE_CLIENT_ID = '7364447610-7nk30untbp3o14go1ovskmpd91u16bvg.apps.googleusercontent.com';
-// Normalizar redirect URI (asegurar que termine en /)
-let redirectPath = window.location.pathname;
-if (!redirectPath.endsWith('/')) redirectPath += '/';
-const GOOGLE_REDIRECT_URI = window.location.origin + redirectPath;
-const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 // ============================================
-// UTILIDADES PKCE
+// ALMACENAMIENTO
 // ============================================
-
-function generateCodeVerifier() {
-    const array = new Uint8Array(64);
-    crypto.getRandomValues(array);
-    return base64URLEncode(array);
-}
-
-async function generateCodeChallenge(verifier) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return base64URLEncode(new Uint8Array(digest));
-}
-
-function base64URLEncode(buffer) {
-    return btoa(String.fromCharCode(...buffer))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-}
-
-function generateState() {
-    const array = new Uint8Array(16);
-    crypto.getRandomValues(array);
-    return base64URLEncode(array);
-}
-
-// ============================================
-// ALMACENAMIENTO DE TOKENS (sessionStorage)
-// ============================================
-
 const STORAGE_KEYS = {
     ACCESS_TOKEN: 'asistencia_access_token',
     EXPIRES_AT: 'asistencia_expires_at',
@@ -58,152 +22,139 @@ const STORAGE_KEYS = {
 };
 
 function saveToken(token, expiresIn) {
-    sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-    sessionStorage.setItem(STORAGE_KEYS.EXPIRES_AT, String(Date.now() + expiresIn * 1000));
+    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+    localStorage.setItem(STORAGE_KEYS.EXPIRES_AT, String(Date.now() + expiresIn * 1000));
 }
 
 function getAccessToken() {
-    return sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
 }
 
 function getTokenExpiry() {
-    return parseInt(sessionStorage.getItem(STORAGE_KEYS.EXPIRES_AT) || '0', 10);
+    return parseInt(localStorage.getItem(STORAGE_KEYS.EXPIRES_AT) || '0', 10);
 }
 
 function isTokenValid() {
     const token = getAccessToken();
     const expiry = getTokenExpiry();
-    return !!token && Date.now() < expiry - 60000; // Margen de 1 minuto
+    return !!token && Date.now() < expiry - 60000;
 }
 
 function saveUserInfo(info) {
-    sessionStorage.setItem(STORAGE_KEYS.USER_INFO, JSON.stringify(info));
+    localStorage.setItem(STORAGE_KEYS.USER_INFO, JSON.stringify(info));
 }
 
 function getUserInfo() {
-    const raw = sessionStorage.getItem(STORAGE_KEYS.USER_INFO);
+    const raw = localStorage.getItem(STORAGE_KEYS.USER_INFO);
     return raw ? JSON.parse(raw) : null;
 }
 
 function clearAuth() {
-    sessionStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-    sessionStorage.removeItem(STORAGE_KEYS.EXPIRES_AT);
-    sessionStorage.removeItem(STORAGE_KEYS.USER_INFO);
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.EXPIRES_AT);
+    localStorage.removeItem(STORAGE_KEYS.USER_INFO);
 }
 
 // ============================================
-// FLUJO DE LOGIN
+// CARGAR BIBLIOTECA GIS
 // ============================================
 
-/**
- * Inicia el flujo OAuth2 PKCE redirigiendo a Google.
- */
-async function signInWithGoogle() {
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateState();
+let gisLoaded = false;
+let tokenClient = null;
 
-    // Guardar verifier y state en localStorage (persiste entre redirects en todos los navegadores)
-    localStorage.setItem('asistencia_code_verifier', codeVerifier);
-    localStorage.setItem('asistencia_state', state);
-
-    const params = new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        redirect_uri: GOOGLE_REDIRECT_URI,
-        response_type: 'code',
-        scope: SCOPES,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-        state: state,
-        access_type: 'online',
-        prompt: 'consent'
-    });
-
-    window.location.href = `${GOOGLE_AUTH_ENDPOINT}?${params.toString()}`;
-}
-
-/**
- * Maneja el redirect de vuelta desde Google.
- * Extrae el code, intercambia por token, y guarda.
- * Retorna true si se procesó un login exitoso.
- */
-async function handleAuthRedirect() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-
-    if (error) {
-        console.error('Error OAuth:', error);
-        return { success: false, error };
-    }
-
-    if (!code) {
-        return { success: false }; // No hay code, no es un redirect de auth
-    }
-
-    // Validar state (CSRF protection)
-    const savedState = localStorage.getItem('asistencia_state');
-    const codeVerifier = localStorage.getItem('asistencia_code_verifier');
-    
-    console.log('OAuth redirect detectado. Code:', code ? 'presente' : 'no');
-    console.log('State recibido:', state, 'State guardado:', savedState);
-    console.log('Code verifier presente:', !!codeVerifier);
-    
-    if (state !== savedState) {
-        console.error('State mismatch. Recibido:', state, 'Guardado:', savedState);
-        return { success: false, error: 'state_mismatch' };
-    }
-
-    if (!codeVerifier) {
-        console.error('No se encontró code_verifier en localStorage');
-        return { success: false, error: 'no_verifier' };
-    }
-
-    try {
-        const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                code: code,
-                client_id: GOOGLE_CLIENT_ID,
-                redirect_uri: GOOGLE_REDIRECT_URI,
-                grant_type: 'authorization_code',
-                code_verifier: codeVerifier
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('Error intercambiando code:', data);
-            return { success: false, error: data.error };
+function loadGIS() {
+    return new Promise((resolve, reject) => {
+        if (window.google?.accounts?.oauth2) {
+            gisLoaded = true;
+            resolve();
+            return;
         }
 
-        // Guardar token
-        saveToken(data.access_token, data.expires_in);
-
-        // Limpiar parámetros de URL (quitar ?code=...)
-        window.history.replaceState({}, document.title, GOOGLE_REDIRECT_URI);
-
-        // Limpiar localStorage temporal
-        localStorage.removeItem('asistencia_code_verifier');
-        localStorage.removeItem('asistencia_state');
-
-        // Obtener info del usuario
-        await fetchUserInfo(data.access_token);
-
-        return { success: true };
-
-    } catch (err) {
-        console.error('Error en token exchange:', err);
-        return { success: false, error: 'network_error' };
-    }
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            gisLoaded = true;
+            resolve();
+        };
+        script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services'));
+        document.head.appendChild(script);
+    });
 }
 
-/**
- * Obtiene información básica del usuario autenticado.
- */
+function initTokenClient() {
+    if (!window.google?.accounts?.oauth2) {
+        console.error('Google Identity Services no disponible');
+        return null;
+    }
+
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+            if (tokenResponse.error) {
+                console.error('Error GIS:', tokenResponse.error);
+                return;
+            }
+            // Guardar token
+            saveToken(tokenResponse.access_token, tokenResponse.expires_in || 3600);
+            // Obtener info del usuario
+            fetchUserInfo(tokenResponse.access_token).then(() => {
+                // Notificar a la app que el login fue exitoso
+                onLoginSuccess();
+            });
+        }
+    });
+
+    return tokenClient;
+}
+
+// ============================================
+// LOGIN / LOGOUT
+// ============================================
+
+function signInWithGoogle() {
+    if (!tokenClient) {
+        console.error('Token client no inicializado');
+        return;
+    }
+    tokenClient.requestAccessToken();
+}
+
+function signOut() {
+    clearAuth();
+    window.location.reload();
+}
+
+function isAuthenticated() {
+    return isTokenValid();
+}
+
+// ============================================
+// INICIALIZACIÓN
+// ============================================
+
+async function initAuth() {
+    try {
+        await loadGIS();
+        initTokenClient();
+    } catch (err) {
+        console.error('Error cargando GIS:', err);
+        return { success: false, error: 'gis_load_error' };
+    }
+
+    if (isAuthenticated()) {
+        return { success: true };
+    }
+
+    return { success: false };
+}
+
+// ============================================
+// INFO DEL USUARIO
+// ============================================
+
 async function fetchUserInfo(accessToken) {
     try {
         const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -218,46 +169,21 @@ async function fetchUserInfo(accessToken) {
     }
 }
 
-/**
- * Cierra sesión y limpia todo.
- */
-function signOut() {
-    clearAuth();
-    window.location.reload();
-}
-
-/**
- * Verifica si hay una sesión activa y válida.
- */
-function isAuthenticated() {
-    return isTokenValid();
-}
-
-/**
- * Inicializa el módulo de auth. Debe llamarse al cargar la app.
- * Retorna { success: boolean, error?: string }
- */
-async function initAuth() {
-    // Primero intentar procesar un redirect de Google
-    const redirectResult = await handleAuthRedirect();
-    if (redirectResult.success) {
-        return { success: true };
-    }
-    if (redirectResult.error) {
-        return redirectResult;
-    }
-
-    // No es un redirect, verificar si ya hay sesión
-    if (isAuthenticated()) {
-        return { success: true };
-    }
-
-    return { success: false };
-}
-
 // ============================================
 // UI HELPERS
 // ============================================
+
+let loginSuccessCallback = null;
+
+function onLoginSuccess() {
+    if (loginSuccessCallback) {
+        loginSuccessCallback();
+    }
+}
+
+function setLoginSuccessCallback(callback) {
+    loginSuccessCallback = callback;
+}
 
 function renderLoginButton(containerId) {
     const container = document.getElementById(containerId);
@@ -292,5 +218,6 @@ window.Auth = {
     getUserInfo,
     signInWithGoogle,
     signOut,
-    renderLoginButton
+    renderLoginButton,
+    setLoginSuccessCallback
 };

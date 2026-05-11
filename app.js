@@ -1,68 +1,41 @@
 /**
- * App Web de Asistencia con ArUco - Metodo "Numero de Lista"
+ * App Web de Asistencia con ArUco + Google Sheets
  * 
- * Arquitectura:
- * - Solo 55 codigos ArUco (IDs 1-55) pegados en los bancos
- * - El profesor selecciona el curso ANTES de escanear
- * - La app cruza: markerId (numero de lista) + curso seleccionado = alumno unico
- * 
- * Esto permite cubrir 2,500+ alumnos con solo 55 codigos fisicos.
+ * Flujo:
+ * 1. Login con Google (OAuth2)
+ * 2. Seleccionar turno (mañana/tarde)
+ * 3. Seleccionar nivel (hoja del spreadsheet)
+ * 4. Seleccionar curso
+ * 5. Escanear códigos ArUco
+ * 6. Enviar asistencia a Google Sheets
  */
 
 // ============================================
-// BASE DE DATOS LOCAL (DEMO)
+// CONFIGURACIÓN
 // ============================================
-// En produccion, esto vendria de una API o JSON externo
-const CURSOS = [
-    { code: "3MB", nombre: "3ro Medio B" },
-    { code: "4MA", nombre: "4to Medio A" },
-    { code: "2MC", nombre: "2do Medio C" }
-];
+const DETECT_INTERVAL_MS = 200;
+const MAX_NUM_LISTA = 55;
 
-// Mapa de alumnos por curso: cursoCode -> { numLista -> alumno }
-const ALUMNOS_DB = {
-    "3MB": {
-        1: { rut: "12.345.601-K", nombre: "Ana Garcia" },
-        2: { rut: "12.345.602-K", nombre: "Benito Lopez" },
-        3: { rut: "12.345.603-K", nombre: "Carla Mendez" },
-        4: { rut: "12.345.604-K", nombre: "Diego Torres" },
-        5: { rut: "12.345.605-K", nombre: "Elena Ruiz" },
-        6: { rut: "12.345.606-K", nombre: "Felipe Soto" },
-        7: { rut: "12.345.607-K", nombre: "Gabriela Diaz" },
-        8: { rut: "12.345.608-K", nombre: "Hugo Martinez" },
-        9: { rut: "12.345.609-K", nombre: "Isabel Castro" },
-        10: { rut: "12.345.610-K", nombre: "Juan Perez" },
-        11: { rut: "12.345.611-K", nombre: "Laura Vargas" },
-        12: { rut: "12.345.612-K", nombre: "Mario Silva" },
-        13: { rut: "12.345.613-K", nombre: "Natalia Rojas" },
-        14: { rut: "12.345.614-K", nombre: "Oscar Fuentes" },
-        15: { rut: "12.345.615-K", nombre: "Patricia Morales" }
-    },
-    "4MA": {
-        1: { rut: "13.456.701-K", nombre: "Alberto Nunez" },
-        2: { rut: "13.456.702-K", nombre: "Beatriz Ortega" },
-        3: { rut: "13.456.703-K", nombre: "Cesar Herrera" },
-        4: { rut: "13.456.704-K", nombre: "Diana Ibarra" },
-        5: { rut: "13.456.705-K", nombre: "Esteban Bravo" }
-    },
-    "2MC": {
-        1: { rut: "11.234.501-K", nombre: "Fernanda Arias" },
-        2: { rut: "11.234.502-K", nombre: "Gustavo Paredes" },
-        3: { rut: "11.234.503-K", nombre: "Helena Campos" },
-        4: { rut: "11.234.504-K", nombre: "Ignacio Reyes" },
-        5: { rut: "11.234.505-K", nombre: "Julia Figueroa" }
-    }
+// ============================================
+// ESTADO GLOBAL
+// ============================================
+const estado = {
+    turno: null,           // 'manana' | 'tarde'
+    nivel: null,           // nombre de la hoja (ej: '6°')
+    curso: null,           // ej: '6A'
+    alumnos: [],           // { numLista, run, nombre, rowIndex }
+    asistencia: new Set(), // numLista de presentes en esta sesión
+    fechaObjetivo: null,   // YYYY-MM-DD
+    columnaFecha: null,    // { column, colIndex }
+    niveles: [],           // lista de nombres de hojas
+    cursos: [],            // lista de cursos en el nivel
+    rawSheetData: [],      // datos brutos de la hoja
+    dateMap: {},           // mapa fecha→columna
+    enviando: false
 };
 
 // ============================================
-// CONFIGURACION
-// ============================================
-const DETECT_INTERVAL_MS = 200;
-//const PROCESS_WIDTH = 640;
-const MAX_NUM_LISTA = 55; // Maximo numero de lista (bancos en el aula)
-
-// ============================================
-// ESTADO
+// REFERENCIAS DOM
 // ============================================
 let videoStream = null;
 let videoTrack = null;
@@ -71,20 +44,21 @@ let processCanvas = null;
 let processCtx = null;
 let isScanning = false;
 let lastDetectTime = 0;
-
-let cursoSeleccionado = null; // Codigo del curso actual (ej: "3MB")
-let asistenciaActual = new Set(); // Set de "numLista" ya registrados en esta sesion
-
 let zoomCapabilities = null;
 let currentZoom = 1;
 
-// ============================================
-// ELEMENTOS DOM
-// ============================================
-const elStartScreen = document.getElementById('start-screen');
-const elScannerScreen = document.getElementById('scanner-screen');
-const elBtnStart = document.getElementById('btn-start');
-const elErrorMsg = document.getElementById('error-msg');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const overlayCtx = overlayCanvas?.getContext('2d');
+
+// Referencias a pantallas
+const screens = {
+    login: document.getElementById('login-screen'),
+    turno: document.getElementById('turno-screen'),
+    nivel: document.getElementById('nivel-screen'),
+    scanner: document.getElementById('scanner-screen')
+};
+
+// Referencias a elementos
 const elVideo = document.getElementById('video');
 const elCounter = document.getElementById('counter');
 const elLastDetected = document.getElementById('last-detected');
@@ -92,75 +66,258 @@ const elAttendanceList = document.getElementById('attendance-list');
 const elSidePanel = document.getElementById('side-panel');
 const elBtnToggleList = document.getElementById('btn-toggle-list');
 const elBtnClear = document.getElementById('btn-clear');
+const elBtnEnviar = document.getElementById('btn-enviar');
 const elZoomSlider = document.getElementById('zoom-slider');
 const elZoomValue = document.getElementById('zoom-value');
 const elZoomIn = document.getElementById('zoom-in');
 const elZoomOut = document.getElementById('zoom-out');
 const elFlash = document.getElementById('flash');
+const elCursoActivo = document.getElementById('curso-activo');
+const elFechaIndicador = document.getElementById('fecha-indicador');
+const elModalConfirm = document.getElementById('modal-confirm');
+const elModalBody = document.getElementById('modal-body');
+const elBtnConfirmSend = document.getElementById('btn-confirm-send');
+const elBtnCancelSend = document.getElementById('btn-cancel-send');
 
 // ============================================
-// INICIALIZACION
+// INICIALIZACIÓN
 // ============================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Verificar librería ArUco
     if (typeof AR === 'undefined' || typeof AR.Detector === 'undefined') {
-        showError('Error: No se pudo cargar la libreria de deteccion ArUco. Verifica tu conexion a internet.');
-        elBtnStart.disabled = true;
+        showErrorGlobal('Error: No se pudo cargar la librería de detección ArUco.');
         return;
     }
-
-    // Crear detector con diccionario ARUCO (DICT_ARUCO_ORIGINAL de OpenCV)
     detector = new AR.Detector({ dictionaryName: 'ARUCO' });
 
     processCanvas = document.getElementById('process-canvas');
     processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
 
-    // Construir selector de curso
-    buildCursoSelector();
+    // Inicializar auth
+    const authResult = await window.Auth.initAuth();
+
+    if (authResult.success && window.Auth.isAuthenticated()) {
+        mostrarPantalla('turno');
+        window.Auth.renderLoginButton('login-button-container');
+    } else {
+        mostrarPantalla('login');
+        window.Auth.renderLoginButton('login-button-container');
+    }
 
     // Event listeners
-    elBtnStart.addEventListener('click', startCamera);
-    elBtnToggleList.addEventListener('click', toggleList);
-    elBtnClear.addEventListener('click', clearAttendance);
-    elZoomSlider.addEventListener('input', onZoomSlider);
-    elZoomIn.addEventListener('click', () => adjustZoom(0.5));
-    elZoomOut.addEventListener('click', () => adjustZoom(-0.5));
+    setupEventListeners();
+});
 
+function setupEventListeners() {
+    // Botones de turno
+    document.getElementById('btn-manana')?.addEventListener('click', () => seleccionarTurno('manana'));
+    document.getElementById('btn-tarde')?.addEventListener('click', () => seleccionarTurno('tarde'));
+
+    // Botón volver en turno
+    document.getElementById('btn-volver-turno')?.addEventListener('click', () => {
+        window.Auth.signOut();
+    });
+
+    // Selectores de nivel y curso
+    document.getElementById('nivel-select')?.addEventListener('change', onNivelChange);
+    document.getElementById('curso-select')?.addEventListener('change', onCursoChange);
+    document.getElementById('btn-iniciar-scanner')?.addEventListener('click', iniciarScanner);
+    document.getElementById('btn-volver-nivel')?.addEventListener('click', () => mostrarPantalla('turno'));
+
+    // Scanner
+    elBtnToggleList?.addEventListener('click', toggleList);
+    elBtnClear?.addEventListener('click', clearAttendance);
+    elBtnEnviar?.addEventListener('click', mostrarConfirmacion);
+    elZoomSlider?.addEventListener('input', onZoomSlider);
+    elZoomIn?.addEventListener('click', () => adjustZoom(0.5));
+    elZoomOut?.addEventListener('click', () => adjustZoom(-0.5));
+
+    // Modal
+    elBtnConfirmSend?.addEventListener('click', confirmarEnvio);
+    elBtnCancelSend?.addEventListener('click', cerrarModal);
+
+    // Cerrar panel lateral al tocar fuera
     document.addEventListener('click', (e) => {
-        if (elSidePanel.classList.contains('open') &&
+        if (elSidePanel?.classList.contains('open') &&
             !elSidePanel.contains(e.target) &&
             e.target !== elBtnToggleList) {
             elSidePanel.classList.remove('open');
         }
     });
-});
+}
 
 // ============================================
-// SELECTOR DE CURSO
+// NAVEGACIÓN ENTRE PANTALLAS
 // ============================================
 
-function buildCursoSelector() {
-    const container = document.createElement('div');
-    container.className = 'curso-selector';
-    container.innerHTML = `
-        <label for="curso-select">Selecciona el curso:</label>
-        <select id="curso-select">
-            <option value="">-- Elige un curso --</option>
-            ${CURSOS.map(c => `<option value="${c.code}">${c.nombre}</option>`).join('')}
-        </select>
-    `;
+function mostrarPantalla(nombre) {
+    Object.values(screens).forEach(s => s?.classList.remove('active'));
+    screens[nombre]?.classList.add('active');
+}
 
-    // Insertar antes del boton de inicio
-    const startContent = document.querySelector('.start-content');
-    startContent.insertBefore(container, elBtnStart);
+function showErrorGlobal(msg) {
+    const el = document.getElementById('global-error');
+    if (el) {
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    } else {
+        alert(msg);
+    }
+}
 
-    // Listener para cambio de curso
-    document.getElementById('curso-select').addEventListener('change', (e) => {
-        cursoSeleccionado = e.target.value;
-        if (cursoSeleccionado) {
-            console.log('Curso seleccionado:', cursoSeleccionado);
+function hideErrorGlobal() {
+    document.getElementById('global-error')?.classList.add('hidden');
+}
+
+// ============================================
+// SELECCIÓN DE TURNO
+// ============================================
+
+async function seleccionarTurno(turno) {
+    estado.turno = turno;
+    hideErrorGlobal();
+
+    const loading = document.getElementById('turno-loading');
+    if (loading) loading.classList.remove('hidden');
+
+    try {
+        estado.niveles = await window.Sheets.getNiveles(turno);
+        if (estado.niveles.length === 0) {
+            throw new Error('No se encontraron hojas en el documento');
         }
-    });
+        buildNivelSelector();
+        mostrarPantalla('nivel');
+    } catch (err) {
+        console.error('Error cargando niveles:', err);
+        showErrorGlobal('Error cargando niveles: ' + err.message);
+    } finally {
+        if (loading) loading.classList.add('hidden');
+    }
+}
+
+// ============================================
+// SELECCIÓN DE NIVEL Y CURSO
+// ============================================
+
+function buildNivelSelector() {
+    const select = document.getElementById('nivel-select');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Selecciona nivel --</option>' +
+        estado.niveles.map(n => `<option value="${n}">${n}</option>`).join('');
+
+    // Limpiar curso
+    const cursoSelect = document.getElementById('curso-select');
+    if (cursoSelect) {
+        cursoSelect.innerHTML = '<option value="">-- Primero selecciona nivel --</option>';
+        cursoSelect.disabled = true;
+    }
+    document.getElementById('btn-iniciar-scanner')?.classList.add('hidden');
+}
+
+async function onNivelChange(e) {
+    const nivel = e.target.value;
+    estado.nivel = nivel || null;
+    estado.curso = null;
+    estado.cursos = [];
+
+    const cursoSelect = document.getElementById('curso-select');
+    const btnIniciar = document.getElementById('btn-iniciar-scanner');
+
+    if (!nivel) {
+        if (cursoSelect) {
+            cursoSelect.innerHTML = '<option value="">-- Primero selecciona nivel --</option>';
+            cursoSelect.disabled = true;
+        }
+        btnIniciar?.classList.add('hidden');
+        return;
+    }
+
+    const loading = document.getElementById('nivel-loading');
+    if (loading) loading.classList.remove('hidden');
+
+    try {
+        const data = await window.Sheets.getSheetData(estado.turno, nivel);
+        estado.rawSheetData = data.values || [];
+        const procesado = window.Sheets.procesarDatosHoja(estado.rawSheetData);
+        estado.cursos = procesado.cursos;
+        estado.alumnosPorCurso = procesado.alumnosPorCurso;
+
+        // Construir selector de curso
+        if (cursoSelect) {
+            cursoSelect.innerHTML = '<option value="">-- Selecciona curso --</option>' +
+                estado.cursos.map(c => `<option value="${c}">${c}</option>`).join('');
+            cursoSelect.disabled = false;
+        }
+
+        // Construir mapa de fechas
+        estado.dateMap = window.DateMapper.construirMapaFechas(estado.rawSheetData);
+        const fechasDisp = window.DateMapper.getFechasDisponibles(estado.dateMap);
+        console.log('Fechas disponibles:', fechasDisp.length, 'primera:', fechasDisp[0], 'última:', fechasDisp[fechasDisp.length - 1]);
+
+    } catch (err) {
+        console.error('Error cargando datos del nivel:', err);
+        showErrorGlobal('Error cargando datos: ' + err.message);
+    } finally {
+        if (loading) loading.classList.add('hidden');
+    }
+}
+
+function onCursoChange(e) {
+    const curso = e.target.value;
+    estado.curso = curso || null;
+
+    const btnIniciar = document.getElementById('btn-iniciar-scanner');
+    if (curso) {
+        btnIniciar?.classList.remove('hidden');
+    } else {
+        btnIniciar?.classList.add('hidden');
+    }
+}
+
+// ============================================
+// INICIAR SCANNER
+// ============================================
+
+async function iniciarScanner() {
+    if (!estado.curso) return;
+
+    // Cargar alumnos del curso
+    estado.alumnos = estado.alumnosPorCurso[estado.curso] || [];
+    if (estado.alumnos.length === 0) {
+        showErrorGlobal('No se encontraron alumnos para el curso ' + estado.curso);
+        return;
+    }
+
+    // Determinar fecha objetivo
+    const colHoy = window.DateMapper.getColumnaHoy(estado.dateMap);
+    if (colHoy) {
+        estado.fechaObjetivo = new Date().toISOString().split('T')[0];
+        estado.columnaFecha = colHoy;
+    } else {
+        // Fecha actual no está en la hoja, mostrar selector
+        const fechas = window.DateMapper.getFechasDisponibles(estado.dateMap);
+        if (fechas.length === 0) {
+            showErrorGlobal('No se encontraron fechas en la hoja de asistencia');
+            return;
+        }
+        // Elegir la última fecha disponible (más reciente)
+        estado.fechaObjetivo = fechas[fechas.length - 1];
+        estado.columnaFecha = estado.dateMap[estado.fechaObjetivo];
+        // Mostrar advertencia
+        console.warn('Fecha actual no encontrada, usando:', estado.fechaObjetivo);
+    }
+
+    // Mostrar info en UI
+    elCursoActivo.textContent = estado.curso;
+    if (elFechaIndicador) {
+        const fechaFormateada = window.DateMapper.formatearFecha(estado.fechaObjetivo);
+        elFechaIndicador.textContent = `Fecha: ${fechaFormateada}`;
+        elFechaIndicador.classList.remove('hidden');
+    }
+
+    // Iniciar cámara
+    await startCamera();
 }
 
 // ============================================
@@ -168,15 +325,6 @@ function buildCursoSelector() {
 // ============================================
 
 async function startCamera() {
-    // Validar que se haya seleccionado un curso
-    if (!cursoSeleccionado) {
-        showError('Por favor selecciona un curso antes de iniciar la camara.');
-        return;
-    }
-
-    elBtnStart.disabled = true;
-    elBtnStart.textContent = 'Iniciando...';
-
     try {
         const constraints = {
             video: {
@@ -198,47 +346,30 @@ async function startCamera() {
             };
         });
 
-        // const aspect = elVideo.videoHeight / elVideo.videoWidth;
-        //processCanvas.width = PROCESS_WIDTH;
-        //processCanvas.height = Math.round(PROCESS_WIDTH * aspect);
-
         detectZoomCapabilities();
 
-        // Mostrar curso seleccionado en el panel superior
-        const cursoNombre = CURSOS.find(c => c.code === cursoSeleccionado)?.nombre || cursoSeleccionado;
-        document.getElementById('curso-activo').textContent = cursoNombre;
+        // Reset asistencia
+        estado.asistencia.clear();
+        elAttendanceList.innerHTML = '';
+        elCounter.textContent = '0';
+        elLastDetected.textContent = 'Esperando...';
 
-        elStartScreen.classList.remove('active');
-        elScannerScreen.classList.add('active');
-
+        mostrarPantalla('scanner');
         isScanning = true;
         requestAnimationFrame(detectionLoop);
 
-        console.log('Camara iniciada. Curso:', cursoSeleccionado);
-
     } catch (err) {
-        console.error('Error al iniciar camara:', err);
-        let msg = 'No se pudo acceder a la camara.';
-        if (err.name === 'NotAllowedError') {
-            msg = 'Permiso de camara denegado.';
-        } else if (err.name === 'NotFoundError') {
-            msg = 'No se encontro una camara disponible.';
-        } else if (err.name === 'NotReadableError') {
-            msg = 'La camara esta siendo usada por otra aplicacion.';
-        }
-        showError(msg);
-        elBtnStart.disabled = false;
-        elBtnStart.textContent = 'Iniciar Camara';
+        console.error('Error al iniciar cámara:', err);
+        let msg = 'No se pudo acceder a la cámara.';
+        if (err.name === 'NotAllowedError') msg = 'Permiso de cámara denegado.';
+        else if (err.name === 'NotFoundError') msg = 'No se encontró una cámara disponible.';
+        else if (err.name === 'NotReadableError') msg = 'La cámara está siendo usada por otra aplicación.';
+        showErrorGlobal(msg);
     }
 }
 
-// ============================================
-// LOOP DE DETECCION
-// ============================================
-
 function detectionLoop() {
     if (!isScanning) return;
-
     const now = Date.now();
     if (now - lastDetectTime >= DETECT_INTERVAL_MS) {
         lastDetectTime = now;
@@ -247,19 +378,12 @@ function detectionLoop() {
     requestAnimationFrame(detectionLoop);
 }
 
-// Referencias a los canvas al inicio de tu archivo (asegúrate de agregar la del overlay)
-const overlayCanvas = document.getElementById('overlay-canvas');
-const overlayCtx = overlayCanvas?.getContext('2d');
-
 function processFrame() {
     if (elVideo.readyState !== elVideo.HAVE_ENOUGH_DATA) return;
 
-    // Configurar máxima resolución
     if (processCanvas.width !== elVideo.videoWidth || processCanvas.width === 0) {
         processCanvas.width = elVideo.videoWidth;
         processCanvas.height = elVideo.videoHeight;
-
-        // Sincronizar también la resolución del canvas visual
         if (overlayCanvas) {
             overlayCanvas.width = elVideo.videoWidth;
             overlayCanvas.height = elVideo.videoHeight;
@@ -268,11 +392,9 @@ function processFrame() {
 
     if (processCanvas.width === 0) return;
 
-    // Copiar frame para procesar
     processCtx.drawImage(elVideo, 0, 0, processCanvas.width, processCanvas.height);
     const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
 
-    // Limpiar el canvas visual en cada frame (borra cuadros viejos)
     if (overlayCtx) {
         overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     }
@@ -281,28 +403,10 @@ function processFrame() {
         const markers = detector.detect(imageData);
         if (markers && markers.length > 0) {
             markers.forEach(marker => {
-                // Registrar asistencia
                 handleMarkerDetected(marker.id);
-
-                // --- MAGIA VISUAL: DIBUJAR CUADRO VERDE ---
                 if (overlayCtx) {
-                    overlayCtx.lineWidth = 6; // Grosor de la línea
-                    overlayCtx.strokeStyle = "#3fb950"; // Verde estilo interfaz
-                    overlayCtx.beginPath();
-
-                    // Mover el "lápiz" a la primera esquina
-                    overlayCtx.moveTo(marker.corners[0].x, marker.corners[0].y);
-
-                    // Trazar línea hacia las otras 3 esquinas
-                    for (let i = 1; i < marker.corners.length; i++) {
-                        overlayCtx.lineTo(marker.corners[i].x, marker.corners[i].y);
-                    }
-
-                    // Cerrar el cuadrado volviendo al inicio y pintar
-                    overlayCtx.closePath();
-                    overlayCtx.stroke();
+                    drawGreenBox(marker.corners);
                 }
-                // ------------------------------------------
             });
         }
     } catch (e) {
@@ -310,60 +414,53 @@ function processFrame() {
     }
 }
 
+function drawGreenBox(corners) {
+    overlayCtx.lineWidth = 6;
+    overlayCtx.strokeStyle = '#3fb950';
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) {
+        overlayCtx.lineTo(corners[i].x, corners[i].y);
+    }
+    overlayCtx.closePath();
+    overlayCtx.stroke();
+}
+
 // ============================================
 // MANEJO DE MARKER DETECTADO
 // ============================================
 
 function handleMarkerDetected(markerId) {
-    // Validar rango: solo aceptamos IDs 1-55 (numeros de lista)
-    if (markerId < 1 || markerId > MAX_NUM_LISTA) {
-        return; // Marker fuera de rango, ignorar
-    }
+    if (markerId < 1 || markerId > MAX_NUM_LISTA) return;
 
     const numLista = markerId;
 
-    // Buscar alumno en la base de datos: curso + numero de lista
-    const alumnosCurso = ALUMNOS_DB[cursoSeleccionado];
-    if (!alumnosCurso) {
-        console.warn('Curso no encontrado en DB:', cursoSeleccionado);
-        return;
-    }
-
-    const alumno = alumnosCurso[numLista];
+    // Buscar alumno en la lista cargada
+    const alumno = estado.alumnos.find(a => a.numLista === numLista);
     if (!alumno) {
-        // Numero de lista sin alumno asignado en este curso
-        console.log(`Numero de lista ${numLista} no tiene alumno en ${cursoSeleccionado}`);
+        console.log(`N° ${numLista} no pertenece al curso ${estado.curso}`);
         return;
     }
 
-    // Anti-duplicados: verificar si ya fue registrado en esta sesion
-    const claveUnica = `${cursoSeleccionado}-${numLista}`;
-    if (asistenciaActual.has(claveUnica)) {
-        return; // Ya registrado, ignorar silenciosamente
-    }
+    // Anti-duplicados
+    if (estado.asistencia.has(numLista)) return;
 
-    // Registrar asistencia
-    asistenciaActual.add(claveUnica);
+    estado.asistencia.add(numLista);
 
     const entry = {
         numLista: numLista,
-        rut: alumno.rut,
+        run: alumno.run,
         nombre: alumno.nombre,
-        curso: cursoSeleccionado,
-        cursoNombre: CURSOS.find(c => c.code === cursoSeleccionado)?.nombre || cursoSeleccionado,
+        curso: estado.curso,
         timestamp: Date.now()
     };
 
-    // Actualizar UI
     updateCounter();
     updateLastDetected(entry);
     addToList(entry);
     flashScreen();
 
-    // Enviar a servidor (demo)
-    sendToServer(entry);
-
-    console.log(`Lista ${numLista} detectada -> ${alumno.nombre} (${alumno.rut})`);
+    console.log(`Lista ${numLista} → ${alumno.nombre}`);
 }
 
 // ============================================
@@ -371,62 +468,47 @@ function handleMarkerDetected(markerId) {
 // ============================================
 
 function updateCounter() {
-    elCounter.textContent = asistenciaActual.size;
+    elCounter.textContent = estado.asistencia.size;
 }
 
 function updateLastDetected(entry) {
-    const text = `Lista ${entry.numLista}: ${entry.nombre}`;
+    const text = `N°${entry.numLista}: ${entry.nombre}`;
     elLastDetected.textContent = text;
     elLastDetected.classList.add('detected');
-
-    setTimeout(() => {
-        elLastDetected.classList.remove('detected');
-    }, 1000);
+    setTimeout(() => elLastDetected.classList.remove('detected'), 1000);
 }
 
 function addToList(entry) {
     const li = document.createElement('li');
     const timeStr = new Date(entry.timestamp).toLocaleTimeString('es-CL', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
 
     li.innerHTML = `
         <div class="estudiante-info">
             <span class="num-lista">N° ${entry.numLista}</span>
             <span class="rut">${entry.nombre}</span>
-            <span class="curso">${entry.rut}</span>
         </div>
         <span class="time">${timeStr}</span>
     `;
-
     elAttendanceList.insertBefore(li, elAttendanceList.firstChild);
 }
 
 function flashScreen() {
-    elFlash.classList.add('active');
-    setTimeout(() => {
-        elFlash.classList.remove('active');
-    }, 150);
+    elFlash?.classList.add('active');
+    setTimeout(() => elFlash?.classList.remove('active'), 150);
 }
 
 function toggleList() {
-    elSidePanel.classList.toggle('open');
+    elSidePanel?.classList.toggle('open');
 }
 
 function clearAttendance() {
-    if (!confirm('Limpiar toda la lista de asistencia?')) return;
-
-    asistenciaActual.clear();
+    if (!confirm('¿Limpiar toda la lista de asistencia?')) return;
+    estado.asistencia.clear();
     elAttendanceList.innerHTML = '';
     elCounter.textContent = '0';
     elLastDetected.textContent = 'Esperando...';
-}
-
-function showError(msg) {
-    elErrorMsg.textContent = msg;
-    elErrorMsg.classList.remove('hidden');
 }
 
 // ============================================
@@ -437,7 +519,7 @@ function detectZoomCapabilities() {
     if (!videoTrack) return;
     try {
         zoomCapabilities = videoTrack.getCapabilities();
-        if (zoomCapabilities.zoom) {
+        if (zoomCapabilities?.zoom) {
             const min = zoomCapabilities.zoom.min || 1;
             const max = zoomCapabilities.zoom.max || 10;
             const step = zoomCapabilities.zoom.step || 0.1;
@@ -447,7 +529,7 @@ function detectZoomCapabilities() {
             elZoomSlider.value = min;
             currentZoom = min;
         } else {
-            document.getElementById('zoom-panel').style.display = 'none';
+            document.getElementById('zoom-panel')?.classList.add('hidden');
         }
     } catch (e) {
         console.log('No se pudieron obtener capacidades de zoom');
@@ -459,7 +541,7 @@ function onZoomSlider(e) {
 }
 
 function adjustZoom(delta) {
-    if (!zoomCapabilities || !zoomCapabilities.zoom) return;
+    if (!zoomCapabilities?.zoom) return;
     const newZoom = Math.max(
         zoomCapabilities.zoom.min,
         Math.min(zoomCapabilities.zoom.max, currentZoom + delta)
@@ -480,31 +562,107 @@ async function applyZoom(value) {
 }
 
 // ============================================
-// ENVIO A SERVIDOR (DEMO)
+// ENVÍO DE ASISTENCIA A GOOGLE SHEETS
 // ============================================
 
-function sendToServer(entry) {
-    const payload = {
-        numLista: entry.numLista,
-        rut: entry.rut,
-        nombre: entry.nombre,
-        cursoCode: entry.curso,
-        cursoNombre: entry.cursoNombre,
-        timestamp: new Date(entry.timestamp).toISOString(),
-        device: navigator.userAgent
-    };
-    console.log('[DEMO] Enviar al servidor:', payload);
+function mostrarConfirmacion() {
+    if (estado.asistencia.size === 0) {
+        alert('No hay alumnos registrados para enviar.');
+        return;
+    }
+    if (estado.enviando) return;
 
-    /*
-    fetch('https://tu-servidor.com/api/asistencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    })
-    .then(r => r.json())
-    .then(data => console.log('Servidor respondio:', data))
-    .catch(err => console.error('Error:', err));
-    */
+    const fechaStr = window.DateMapper.formatearFecha(estado.fechaObjetivo);
+    const listaNombres = Array.from(estado.asistencia)
+        .sort((a, b) => a - b)
+        .map(num => {
+            const al = estado.alumnos.find(a => a.numLista === num);
+            return `N°${num}: ${al ? al.nombre : '?'}`;
+        })
+        .join('\n');
+
+    elModalBody.innerHTML = `
+        <p><strong>Turno:</strong> ${estado.turno === 'manana' ? 'Mañana' : 'Tarde'}</p>
+        <p><strong>Curso:</strong> ${estado.curso}</p>
+        <p><strong>Fecha:</strong> ${fechaStr}</p>
+        <p><strong>Presentes:</strong> ${estado.asistencia.size}</p>
+        <hr>
+        <pre class="lista-confirmacion">${listaNombres}</pre>
+    `;
+
+    elModalConfirm?.classList.add('active');
+}
+
+function cerrarModal() {
+    elModalConfirm?.classList.remove('active');
+}
+
+async function confirmarEnvio() {
+    if (estado.enviando) return;
+    estado.enviando = true;
+    elBtnConfirmSend.textContent = 'Enviando...';
+    elBtnConfirmSend.disabled = true;
+
+    try {
+        const updates = [];
+        const sheetName = estado.nivel;
+        const col = estado.columnaFecha.column;
+
+        // Para cada alumno presente, preparar la celda
+        for (const numLista of estado.asistencia) {
+            const alumno = estado.alumnos.find(a => a.numLista === numLista);
+            if (!alumno) continue;
+
+            const range = `${sheetName}!${col}${alumno.rowIndex}`;
+            updates.push({
+                range: range,
+                values: [['P']]
+            });
+        }
+
+        if (updates.length === 0) {
+            throw new Error('No hay alumnos para enviar');
+        }
+
+        const result = await window.Sheets.batchUpdateValues(estado.turno, updates);
+        console.log('Asistencia enviada:', result);
+
+        alert(`✅ Asistencia enviada correctamente.\n${updates.length} alumnos marcados con P.`);
+
+        // Limpiar asistencia local
+        estado.asistencia.clear();
+        elAttendanceList.innerHTML = '';
+        elCounter.textContent = '0';
+        elLastDetected.textContent = 'Esperando...';
+
+        cerrarModal();
+
+        // Volver a la pantalla de selección
+        stopCamera();
+        mostrarPantalla('nivel');
+
+    } catch (err) {
+        console.error('Error enviando asistencia:', err);
+        if (err.message === 'TOKEN_EXPIRED') {
+            alert('⚠️ Sesión expirada. Por favor vuelve a iniciar sesión.');
+            window.Auth.signOut();
+        } else {
+            alert('❌ Error al enviar: ' + err.message);
+        }
+    } finally {
+        estado.enviando = false;
+        elBtnConfirmSend.textContent = 'Confirmar y Enviar';
+        elBtnConfirmSend.disabled = false;
+    }
+}
+
+function stopCamera() {
+    isScanning = false;
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+        videoTrack = null;
+    }
 }
 
 // ============================================
@@ -512,7 +670,11 @@ function sendToServer(entry) {
 // ============================================
 
 window.addEventListener('beforeunload', () => {
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-    }
+    stopCamera();
 });
+
+// Botón volver desde scanner
+window.volverANivel = function() {
+    stopCamera();
+    mostrarPantalla('nivel');
+};

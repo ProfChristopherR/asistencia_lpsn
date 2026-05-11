@@ -30,8 +30,10 @@ body {
     display: flex;
 }
 
-/* Pantalla de inicio */
-#start-screen {
+/* Pantallas de inicio */
+#login-screen,
+#turno-screen,
+#nivel-screen {
     background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
     z-index: 100;
     padding: 2rem;
@@ -57,34 +59,80 @@ body {
     margin-bottom: 1.5rem;
 }
 
-/* Selector de curso */
-.curso-selector {
-    margin-bottom: 1.5rem;
-    text-align: left;
+/* Login */
+.login-box {
     background: rgba(22, 27, 34, 0.8);
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: 12px;
     border: 1px solid rgba(48, 54, 61, 0.5);
+    max-width: 340px;
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
-.curso-selector label {
-    display: block;
+.login-box p {
     font-size: 0.9rem;
     color: #c9d1d9;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.4;
 }
 
-.curso-selector select {
-    width: 100%;
-    padding: 0.8rem;
+/* Botón Google */
+.btn-google {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: #fff;
+    color: #3c4043;
+    border: none;
+    padding: 0.8rem 1.5rem;
     font-size: 1rem;
     border-radius: 8px;
-    border: 1px solid rgba(48, 54, 61, 0.8);
-    background: #0d1117;
-    color: #fff;
     cursor: pointer;
+    font-weight: 500;
+    transition: transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    width: 100%;
 }
 
+.btn-google:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-google:active {
+    transform: scale(0.98);
+}
+
+.google-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* Info de usuario */
+.user-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.5rem;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    color: #c9d1d9;
+    font-weight: 500;
+}
+
+/* Botón primario */
 .btn-primary {
     background: #238636;
     color: white;
@@ -102,6 +150,26 @@ body {
     transform: scale(0.97);
 }
 
+/* Botón secundario */
+.btn-secondary {
+    background: transparent;
+    color: #8b949e;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    margin-top: 1rem;
+}
+
+.btn-secondary:hover {
+    border-color: rgba(139, 148, 158, 0.6);
+    color: #c9d1d9;
+}
+
+/* Error */
 .error {
     margin-top: 1rem;
     padding: 0.8rem 1rem;
@@ -112,8 +180,103 @@ body {
     font-size: 0.9rem;
 }
 
+#global-error {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    z-index: 200;
+    text-align: center;
+    margin: 0;
+}
+
 .hidden {
     display: none !important;
+}
+
+/* Turno */
+.turno-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 1.5rem;
+}
+
+.btn-turno {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(22, 27, 34, 0.9);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    padding: 1.2rem 1.5rem;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    color: #fff;
+}
+
+.btn-turno:hover {
+    border-color: #58a6ff;
+    background: rgba(88, 166, 255, 0.1);
+}
+
+.btn-turno:active {
+    transform: scale(0.98);
+}
+
+.turno-icon {
+    font-size: 2rem;
+}
+
+.turno-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* Selectores */
+.selector-group {
+    margin-bottom: 1.2rem;
+    text-align: left;
+    width: 100%;
+    max-width: 300px;
+}
+
+.selector-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: #8b949e;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+}
+
+.selector-group select {
+    width: 100%;
+    padding: 0.9rem;
+    font-size: 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    background: #0d1117;
+    color: #fff;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+}
+
+.selector-group select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Loading */
+.loading {
+    color: #58a6ff;
+    font-size: 0.9rem;
+    padding: 0.5rem;
 }
 
 /* Scanner */
@@ -213,11 +376,16 @@ body {
     gap: 0.8rem;
 }
 
+.top-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
 .curso-activo-box {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-width: 80px;
+    align-items: flex-start;
 }
 
 .curso-label {
@@ -232,6 +400,14 @@ body {
     font-weight: 700;
     color: #58a6ff;
     line-height: 1.2;
+}
+
+.fecha-indicador {
+    font-size: 0.75rem;
+    color: #8b949e;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
 }
 
 .counter-box {
@@ -439,6 +615,66 @@ body {
     transform: scale(0.92);
 }
 
+/* Botón enviar */
+.btn-enviar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #238636;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 30px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
+    transition: transform 0.15s, background 0.2s;
+}
+
+.btn-enviar:active {
+    transform: translateX(-50%) scale(0.95);
+}
+
+.btn-enviar:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.enviar-icon {
+    font-size: 1.2rem;
+}
+
+/* Botón volver en scanner */
+.btn-volver-scanner {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 15;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    transition: background 0.2s;
+}
+
+.btn-volver-scanner:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
 /* Flash de detección */
 #flash {
     position: fixed;
@@ -454,6 +690,76 @@ body {
     opacity: 1;
 }
 
+/* Modal */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    padding: 1rem;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: #161b22;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-width: 400px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-content h2 {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    color: #58a6ff;
+}
+
+.modal-content p {
+    font-size: 0.9rem;
+    color: #c9d1d9;
+    margin-bottom: 0.5rem;
+}
+
+.modal-content hr {
+    border: none;
+    border-top: 1px solid rgba(48, 54, 61, 0.5);
+    margin: 0.8rem 0;
+}
+
+.lista-confirmacion {
+    font-size: 0.85rem;
+    color: #c9d1d9;
+    max-height: 200px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.8rem;
+    border-radius: 8px;
+    line-height: 1.6;
+    font-family: inherit;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.2rem;
+}
+
+.modal-actions .btn-primary,
+.modal-actions .btn-secondary {
+    flex: 1;
+    margin-top: 0;
+}
+
 /* Responsive */
 @media (max-width: 400px) {
     .counter-value {
@@ -467,6 +773,14 @@ body {
     #zoom-slider {
         width: 90px;
     }
+
+    .start-content h1 {
+        font-size: 1.6rem;
+    }
+
+    .turno-buttons {
+        max-width: 100%;
+    }
 }
 
 /* Pizarra transparente para dibujar cuadros ArUco */
@@ -477,9 +791,6 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* Para que coincida con la escala del video */
     pointer-events: none;
-    /* Deja pasar los clicks al fondo */
     z-index: 5;
-    /* Asegura que esté por encima del video */
 }

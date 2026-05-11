@@ -11,26 +11,74 @@
 
 <body>
     <div id="app">
-        <!-- Pantalla de inicio -->
-        <div id="start-screen" class="screen active">
+        <!-- Error global -->
+        <div id="global-error" class="error hidden"></div>
+
+        <!-- Pantalla de Login -->
+        <div id="login-screen" class="screen active">
             <div class="start-content">
                 <h1>Control de Asistencia</h1>
-                <p class="subtitle">Metodo "Numero de Lista"</p>
-                <p class="description">Selecciona el curso y escanea los codigos de los bancos</p>
-                <button id="btn-start" class="btn-primary">Iniciar Camara</button>
-                <div id="error-msg" class="error hidden"></div>
+                <p class="subtitle">Liceo Politécnico San Nicolás</p>
+                <p class="description">Método "Número de Lista" con códigos ArUco</p>
+                <div class="login-box">
+                    <p>Inicia sesión con tu cuenta institucional de Google para acceder a las hojas de asistencia.</p>
+                    <div id="login-button-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla de selección de Turno -->
+        <div id="turno-screen" class="screen">
+            <div class="start-content">
+                <h1>Seleccionar Turno</h1>
+                <p class="description">Elige el turno de asistencia</p>
+                <div class="turno-buttons">
+                    <button id="btn-manana" class="btn-turno">
+                        <span class="turno-icon">☀️</span>
+                        <span class="turno-label">Mañana</span>
+                    </button>
+                    <button id="btn-tarde" class="btn-turno">
+                        <span class="turno-icon">🌙</span>
+                        <span class="turno-label">Tarde</span>
+                    </button>
+                </div>
+                <div id="turno-loading" class="loading hidden">Cargando...</div>
+                <button id="btn-volver-turno" class="btn-secondary">Cerrar sesión</button>
+            </div>
+        </div>
+
+        <!-- Pantalla de selección de Nivel y Curso -->
+        <div id="nivel-screen" class="screen">
+            <div class="start-content">
+                <h1>Seleccionar Curso</h1>
+                <p class="description">Elige el nivel y curso para tomar asistencia</p>
+
+                <div class="selector-group">
+                    <label for="nivel-select">Nivel:</label>
+                    <select id="nivel-select">
+                        <option value="">-- Selecciona nivel --</option>
+                    </select>
+                </div>
+
+                <div class="selector-group">
+                    <label for="curso-select">Curso:</label>
+                    <select id="curso-select" disabled>
+                        <option value="">-- Primero selecciona nivel --</option>
+                    </select>
+                </div>
+
+                <div id="nivel-loading" class="loading hidden">Cargando datos...</div>
+
+                <button id="btn-iniciar-scanner" class="btn-primary hidden">Iniciar Cámara</button>
+                <button id="btn-volver-nivel" class="btn-secondary">Volver</button>
             </div>
         </div>
 
         <!-- Pantalla de escaneo -->
         <div id="scanner-screen" class="screen">
-            <!-- Video de camara -->
+            <!-- Video de cámara -->
             <video id="video" autoplay playsinline muted></video>
             <canvas id="overlay-canvas"></canvas>
-
-            <canvas id="process-canvas"></canvas>
-
-            <!-- Canvas oculto para procesamiento -->
             <canvas id="process-canvas"></canvas>
 
             <!-- Overlay visual -->
@@ -43,11 +91,16 @@
                 <div class="center-line v"></div>
             </div>
 
-            <!-- Panel superior: Curso, Contador y estado -->
+            <!-- Panel superior: Curso, Fecha, Contador -->
             <div id="top-panel">
-                <div class="curso-activo-box">
-                    <span class="curso-label">Curso</span>
-                    <span id="curso-activo" class="curso-value">--</span>
+                <div class="top-info">
+                    <div class="curso-activo-box">
+                        <span class="curso-label">Curso</span>
+                        <span id="curso-activo" class="curso-value">--</span>
+                    </div>
+                    <div id="fecha-indicador" class="fecha-indicador hidden">
+                        Fecha: --
+                    </div>
                 </div>
                 <div class="counter-box">
                     <span class="counter-label">Presentes</span>
@@ -73,17 +126,41 @@
                 <ul id="attendance-list"></ul>
             </div>
 
-            <!-- Boton para alternar lista -->
+            <!-- Botón para alternar lista -->
             <button id="btn-toggle-list" class="btn-fab">=</button>
 
-            <!-- Flash de deteccion -->
+            <!-- Botón enviar -->
+            <button id="btn-enviar" class="btn-enviar">
+                <span class="enviar-icon">✓</span>
+                <span class="enviar-label">Enviar</span>
+            </button>
+
+            <!-- Botón volver -->
+            <button id="btn-volver-scanner" class="btn-volver-scanner" onclick="volverANivel()">←</button>
+
+            <!-- Flash de detección -->
             <div id="flash"></div>
         </div>
     </div>
 
-    <!-- Librerias js-aruco2 desde CDN -->
+    <!-- Modal de confirmación -->
+    <div id="modal-confirm" class="modal">
+        <div class="modal-content">
+            <h2>Confirmar Envío</h2>
+            <div id="modal-body"></div>
+            <div class="modal-actions">
+                <button id="btn-cancel-send" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirm-send" class="btn-primary">Confirmar y Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Librerías -->
     <script src="https://cdn.jsdelivr.net/npm/js-aruco2@2.0.0/src/cv.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-aruco2@2.0.0/src/aruco.js"></script>
+    <script src="auth.js"></script>
+    <script src="datemapper.js"></script>
+    <script src="sheets.js"></script>
     <script src="app.js"></script>
 </body>
 

@@ -8,7 +8,7 @@
 // ============================================
 // CONFIGURACIÓN - EDITAR CON TU CLIENT ID
 // ============================================
-const GOOGLE_CLIENT_ID = 'TU_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '7364447610-7nk30untbp3o14go1ovskmpd91u16bvg.apps.googleusercontent.com';
 const GOOGLE_REDIRECT_URI = window.location.origin + window.location.pathname;
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';

@@ -10,7 +10,8 @@
 // CONFIGURACIÓN
 // ============================================
 const GOOGLE_CLIENT_ID = '7364447610-7nk30untbp3o14go1ovskmpd91u16bvg.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+// Scope para leer y escribir en Google Sheets + info básica del usuario
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 // ============================================
 // ALMACENAMIENTO

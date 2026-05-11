@@ -30,7 +30,8 @@ async function apiFetch(url, options = {}) {
     const response = await fetch(url, { ...options, headers });
 
     if (response.status === 401) {
-        // Token expirado
+        const data = await response.json().catch(() => ({}));
+        console.error('Error 401 detalle:', data);
         throw new Error('TOKEN_EXPIRED');
     }
 

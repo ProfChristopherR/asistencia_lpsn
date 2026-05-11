@@ -14,7 +14,7 @@
 // CONFIGURACIÓN
 // ============================================
 const DETECT_INTERVAL_MS = 200;
-const MAX_NUM_LISTA = 55;
+const MAX_NUM_LISTA = 50; // Códigos ArUco del 1 al 50
 
 // ============================================
 // ESTADO GLOBAL
@@ -437,11 +437,17 @@ function drawGreenBox(corners) {
 // ============================================
 
 function handleMarkerDetected(markerId) {
-    if (markerId < 1 || markerId > MAX_NUM_LISTA) return;
+    console.log('Marker detectado:', markerId, 'Rango válido:', markerId >= 1 && markerId <= MAX_NUM_LISTA);
+    
+    if (markerId < 1 || markerId > MAX_NUM_LISTA) {
+        console.log('Marker fuera de rango (1-50), ignorando');
+        return;
+    }
 
     const numLista = markerId;
 
     // Buscar alumno en la lista cargada
+    console.log('Buscando alumno N°', numLista, 'en', estado.alumnos.length, 'alumnos del curso', estado.curso);
     const alumno = estado.alumnos.find(a => a.numLista === numLista);
     if (!alumno) {
         console.log(`N° ${numLista} no pertenece al curso ${estado.curso}`);
@@ -449,7 +455,10 @@ function handleMarkerDetected(markerId) {
     }
 
     // Anti-duplicados
-    if (estado.asistencia.has(numLista)) return;
+    if (estado.asistencia.has(numLista)) {
+        console.log(`N° ${numLista} ya registrado`);
+        return;
+    }
 
     estado.asistencia.add(numLista);
 
@@ -461,6 +470,7 @@ function handleMarkerDetected(markerId) {
         timestamp: Date.now()
     };
 
+    console.log('Registrando asistencia:', entry);
     updateCounter();
     updateLastDetected(entry);
     addToList(entry);

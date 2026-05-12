@@ -104,10 +104,12 @@ async function getNiveles(turno) {
 
     const filtrados = todos.filter(nombre => {
         const limpio = nombre.trim();
-        // Aceptar: números seguidos de ° (grado U+00B0) o º (ordinal U+00BA)
-        // Ej: 6°, 7°, 8°, 1°, 2º, 3º, 4º
+        // Aceptar: números seguidos de ° o º (con o sin espacios)
+        // Ej: 6°, 7°, 8°, 1°, 2º, 3º, 4º, 10°, 11º, etc.
         // o EPJA (case insensitive)
-        const esNumeroConGrado = /^\d+\s*[°º]$/.test(limpio);
+        // Usar replace para normalizar °/º y verificar el patrón
+        const normalizado = limpio.replace(/[°º]/g, 'GRADO');
+        const esNumeroConGrado = /^\d+\s*GRADO$/.test(normalizado);
         const esEPJA = /^EPJA$/i.test(limpio);
         return esNumeroConGrado || esEPJA;
     });

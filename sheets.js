@@ -90,16 +90,26 @@ async function batchUpdateValues(turno, updates) {
  * Filtra solo hojas con formato de nivel válido:
  * - 6°, 7°, 8°, 1°, 2°, 3°, 4° (número + °)
  * - EPJA (educación para jóvenes y adultos)
+ * 
+ * Ignora hojas como "Hoja 1", "Plantilla", etc.
  */
 async function getNiveles(turno) {
     const spreadsheet = await getSpreadsheet(turno);
     const todos = spreadsheet.sheets.map(s => s.properties.title);
 
-    // Patrón válido: número seguido de ° (ej: 6°, 7°, 1°, 2°, 3°, 4°)
-    // o exactamente "EPJA"
-    const patronValido = /^(\d+°|EPJA)$/;
+    // Patrón válido: número seguido de ° opcionalmente con espacios
+    // o exactamente "EPJA" (con o sin espacios)
+    // Ejemplos válidos: "6°", "7° ", " 1°", "EPJA", "EPJA "
+    const patronValido = /^\s*(\d+\s*°|EPJA)\s*$/i;
 
-    const filtrados = todos.filter(nombre => patronValido.test(nombre));
+    const filtrados = todos.filter(nombre => {
+        const limpio = nombre.trim();
+        // Aceptar: números con ° (ej: 6°, 7°, 8°, 1°, 2°, 3°, 4°)
+        // o EPJA (case insensitive)
+        const esNumeroConGrado = /^\d+\s*°$/.test(limpio);
+        const esEPJA = /^EPJA$/i.test(limpio);
+        return esNumeroConGrado || esEPJA;
+    });
 
     console.log('Hojas encontradas:', todos);
     console.log('Hojas filtradas (niveles válidos):', filtrados);

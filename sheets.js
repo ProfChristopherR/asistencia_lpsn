@@ -104,14 +104,15 @@ async function getNiveles(turno) {
 
     const filtrados = todos.filter(nombre => {
         const limpio = nombre.trim();
-        // Aceptar: números seguidos de ° o º (con o sin espacios)
+        // Aceptar: números seguidos de CUALQUIER símbolo que no sea letra/dígito
+        // Esto captura °, º, o, ⁰, ˚, etc. sin importar el Unicode exacto
         // Ej: 6°, 7°, 8°, 1°, 2º, 3º, 4º, 10°, 11º, etc.
         // o EPJA (case insensitive)
-        // Usar replace para normalizar °/º y verificar el patrón
-        const normalizado = limpio.replace(/[°º]/g, 'GRADO');
-        const esNumeroConGrado = /^\d+\s*GRADO$/.test(normalizado);
+        // Patrón: empieza con 1+ dígitos, opcionalmente espacios, 
+        //          luego 1+ caracteres NO alfanuméricos, fin de string
+        const esNumeroConSimbolo = /^\d+\s*[^a-zA-Z0-9\s]+$/.test(limpio);
         const esEPJA = /^EPJA$/i.test(limpio);
-        return esNumeroConGrado || esEPJA;
+        return esNumeroConSimbolo || esEPJA;
     });
 
     console.log('Hojas encontradas:', todos);

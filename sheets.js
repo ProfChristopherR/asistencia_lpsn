@@ -87,10 +87,24 @@ async function batchUpdateValues(turno, updates) {
 
 /**
  * Obtiene lista de niveles (nombres de hojas) de un turno.
+ * Filtra solo hojas con formato de nivel válido:
+ * - 6°, 7°, 8°, 1°, 2°, 3°, 4° (número + °)
+ * - EPJA (educación para jóvenes y adultos)
  */
 async function getNiveles(turno) {
     const spreadsheet = await getSpreadsheet(turno);
-    return spreadsheet.sheets.map(s => s.properties.title);
+    const todos = spreadsheet.sheets.map(s => s.properties.title);
+
+    // Patrón válido: número seguido de ° (ej: 6°, 7°, 1°, 2°, 3°, 4°)
+    // o exactamente "EPJA"
+    const patronValido = /^(\d+°|EPJA)$/;
+
+    const filtrados = todos.filter(nombre => patronValido.test(nombre));
+
+    console.log('Hojas encontradas:', todos);
+    console.log('Hojas filtradas (niveles válidos):', filtrados);
+
+    return filtrados;
 }
 
 /**

@@ -40,6 +40,41 @@ body {
     text-align: center;
 }
 
+/* Logo grande en login */
+.logo-login {
+    width: 180px;
+    height: 180px;
+    object-fit: contain;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+/* Logo en esquina para otras pantallas */
+.logo-corner {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    opacity: 0.7;
+    z-index: 10;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* En móvil, logo más pequeño */
+@media (max-width: 400px) {
+    .logo-login {
+        width: 140px;
+        height: 140px;
+    }
+
+    .logo-corner {
+        width: 45px;
+        height: 45px;
+    }
+}
+
 .start-content h1 {
     font-size: 2rem;
     margin-bottom: 0.5rem;

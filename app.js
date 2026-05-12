@@ -496,6 +496,7 @@ function updateLastDetected(entry) {
 
 function addToList(entry) {
     const li = document.createElement('li');
+    li.dataset.numLista = entry.numLista;
     const timeStr = new Date(entry.timestamp).toLocaleTimeString('es-CL', {
         hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
@@ -505,9 +506,79 @@ function addToList(entry) {
             <span class="num-lista">N° ${entry.numLista}</span>
             <span class="rut">${entry.nombre}</span>
         </div>
-        <span class="time">${timeStr}</span>
+        <div class="item-actions">
+            <span class="time">${timeStr}</span>
+            <button class="btn-eliminar" title="Eliminar">✕</button>
+        </div>
     `;
+
+    li.querySelector('.btn-eliminar')?.addEventListener('click', () => eliminarAlumno(entry.numLista));
     elAttendanceList.insertBefore(li, elAttendanceList.firstChild);
+}
+
+function eliminarAlumno(numLista) {
+    estado.asistencia.delete(numLista);
+    renderAttendanceList();
+    updateCounter();
+    console.log(`Alumno N°${numLista} eliminado`);
+}
+
+function renderAttendanceList() {
+    elAttendanceList.innerHTML = '';
+    const sorted = Array.from(estado.asistencia).sort((a, b) => a - b);
+    for (const numLista of sorted) {
+        const alumno = estado.alumnos.find(a => a.numLista === numLista);
+        if (!alumno) continue;
+        addToList({
+            numLista: numLista,
+            nombre: alumno.nombre,
+            run: alumno.run,
+            timestamp: Date.now()
+        });
+    }
+}
+
+function toggleAgregarForm() {
+    const form = document.getElementById('agregar-form');
+    form?.classList.toggle('hidden');
+    if (!form?.classList.contains('hidden')) {
+        document.getElementById('input-num-lista')?.focus();
+    }
+}
+
+function agregarAlumnoManual() {
+    const input = document.getElementById('input-num-lista');
+    const numLista = parseInt(input?.value, 10);
+
+    if (isNaN(numLista) || numLista < 1 || numLista > 50) {
+        alert('Ingresa un número de lista válido (1-50)');
+        return;
+    }
+
+    if (estado.asistencia.has(numLista)) {
+        alert(`El alumno N°${numLista} ya está registrado`);
+        return;
+    }
+
+    const alumno = estado.alumnos.find(a => a.numLista === numLista);
+    if (!alumno) {
+        alert(`No se encontró un alumno con N°${numLista} en este curso`);
+        return;
+    }
+
+    estado.asistencia.add(numLista);
+    addToList({
+        numLista: numLista,
+        nombre: alumno.nombre,
+        run: alumno.run,
+        timestamp: Date.now()
+    });
+    updateCounter();
+    updateLastDetected({ numLista: numLista, nombre: alumno.nombre });
+    flashScreen();
+
+    input.value = '';
+    console.log(`Alumno N°${numLista} agregado manualmente: ${alumno.nombre}`);
 }
 
 function flashScreen() {

@@ -124,7 +124,14 @@
             <div id="side-panel">
                 <div class="panel-header">
                     <span>Registrados</span>
-                    <button id="btn-clear" class="btn-small">Limpiar</button>
+                    <div class="panel-actions">
+                        <button id="btn-toggle-agregar" class="btn-small btn-agregar" title="Agregar alumno">+</button>
+                        <button id="btn-clear" class="btn-small">Limpiar</button>
+                    </div>
+                </div>
+                <div id="agregar-form" class="agregar-form hidden">
+                    <input type="number" id="input-num-lista" min="1" max="50" placeholder="N° lista">
+                    <button id="btn-agregar-manual" class="btn-small btn-primary-small">Agregar</button>
                 </div>
                 <ul id="attendance-list"></ul>
             </div>

@@ -559,6 +559,75 @@ body {
     font-weight: 600;
 }
 
+.panel-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.btn-agregar {
+    background: rgba(35, 134, 54, 0.2);
+    color: #3fb950;
+    border: 1px solid rgba(35, 134, 54, 0.3);
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+}
+
+.agregar-form {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+    background: rgba(22, 27, 34, 0.5);
+}
+
+.agregar-form input {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    background: #0d1117;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.btn-primary-small {
+    background: #238636;
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#attendance-list li .item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-eliminar {
+    background: rgba(248, 81, 73, 0.15);
+    color: #f85149;
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.btn-eliminar:active {
+    background: rgba(248, 81, 73, 0.3);
+}
+
 .btn-small {
     background: rgba(248, 81, 73, 0.15);
     color: #f85149;

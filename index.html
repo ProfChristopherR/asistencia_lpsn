@@ -130,8 +130,10 @@
                     </div>
                 </div>
                 <div id="agregar-form" class="agregar-form hidden">
-                    <input type="number" id="input-num-lista" min="1" max="50" placeholder="N° lista">
-                    <button id="btn-agregar-manual" class="btn-small btn-primary-small">Agregar</button>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="input-buscar-alumno" placeholder="N° lista o nombre..." autocomplete="off">
+                        <ul id="autocomplete-results" class="autocomplete-results hidden"></ul>
+                    </div>
                 </div>
                 <ul id="attendance-list"></ul>
             </div>

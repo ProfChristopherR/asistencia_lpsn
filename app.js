@@ -14,7 +14,7 @@
 // CONFIGURACIÓN
 // ============================================
 const DETECT_INTERVAL_MS = 200;
-const MAX_NUM_LISTA = 50; // Códigos ArUco del 1 al 50
+const MAX_NUM_LISTA = 60; // Códigos ArUco del 1 al 60
 
 // ============================================
 // ESTADO GLOBAL
@@ -542,43 +542,89 @@ function toggleAgregarForm() {
     const form = document.getElementById('agregar-form');
     form?.classList.toggle('hidden');
     if (!form?.classList.contains('hidden')) {
-        document.getElementById('input-num-lista')?.focus();
+        document.getElementById('input-buscar-alumno')?.focus();
     }
 }
 
-function agregarAlumnoManual() {
-    const input = document.getElementById('input-num-lista');
-    const numLista = parseInt(input?.value, 10);
+function onBuscarAlumnoInput(e) {
+    const texto = e.target.value.trim().toLowerCase();
+    const resultadosEl = document.getElementById('autocomplete-results');
 
-    if (isNaN(numLista) || numLista < 1 || numLista > 50) {
-        alert('Ingresa un número de lista válido (1-50)');
+    if (!texto || texto.length < 1) {
+        resultadosEl?.classList.add('hidden');
         return;
     }
 
-    if (estado.asistencia.has(numLista)) {
-        alert(`El alumno N°${numLista} ya está registrado`);
+    // Filtrar alumnos del curso que coincidan
+    const coincidencias = estado.alumnos.filter(al => {
+        const coincideNum = String(al.numLista).includes(texto);
+        const coincideNombre = al.nombre.toLowerCase().includes(texto);
+        return coincideNum || coincideNombre;
+    }).slice(0, 8); // Máximo 8 resultados
+
+    if (coincidencias.length === 0) {
+        resultadosEl.innerHTML = '<li class="autocomplete-no-results">Sin coincidencias</li>';
+        resultadosEl?.classList.remove('hidden');
         return;
     }
 
-    const alumno = estado.alumnos.find(a => a.numLista === numLista);
-    if (!alumno) {
-        alert(`No se encontró un alumno con N°${numLista} en este curso`);
-        return;
-    }
+    resultadosEl.innerHTML = coincidencias.map(al => {
+        const yaRegistrado = estado.asistencia.has(al.numLista);
+        const claseRegistrado = yaRegistrado ? 'registrado' : '';
+        const badge = yaRegistrado ? '<span class="badge-registrado">✓</span>' : '';
+        const oyenteBadge = al.esOyente ? '<span class="badge-oyente">OYENTE</span>' : '';
+        return `
+            <li class="autocomplete-item ${claseRegistrado}" data-num-lista="${al.numLista}">
+                <span class="autocomplete-num">N°${al.numLista}</span>
+                <span class="autocomplete-nombre">${al.nombre}</span>
+                ${oyenteBadge}
+                ${badge}
+            </li>
+        `;
+    }).join('');
 
-    estado.asistencia.add(numLista);
-    addToList({
-        numLista: numLista,
-        nombre: alumno.nombre,
-        run: alumno.run,
-        timestamp: Date.now()
+    // Agregar event listeners a los items
+    resultadosEl.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const numLista = parseInt(item.dataset.numLista, 10);
+            seleccionarAlumnoAutocomplete(numLista);
+        });
     });
-    updateCounter();
-    updateLastDetected({ numLista: numLista, nombre: alumno.nombre });
-    flashScreen();
 
-    input.value = '';
-    console.log(`Alumno N°${numLista} agregado manualmente: ${alumno.nombre}`);
+    resultadosEl?.classList.remove('hidden');
+}
+
+function onBuscarAlumnoKeydown(e) {
+    if (e.key === 'Escape') {
+        document.getElementById('autocomplete-results')?.classList.add('hidden');
+    }
+}
+
+function seleccionarAlumnoAutocomplete(numLista) {
+    if (estado.asistencia.has(numLista)) {
+        // Si ya está registrado, lo eliminamos (toggle)
+        eliminarAlumno(numLista);
+    } else {
+        // Agregar
+        const alumno = estado.alumnos.find(a => a.numLista === numLista);
+        if (!alumno) return;
+
+        estado.asistencia.add(numLista);
+        addToList({
+            numLista: numLista,
+            nombre: alumno.nombre,
+            run: alumno.run,
+            timestamp: Date.now()
+        });
+        updateCounter();
+        updateLastDetected({ numLista: numLista, nombre: alumno.nombre });
+        flashScreen();
+    }
+
+    // Limpiar input y ocultar resultados
+    const input = document.getElementById('input-buscar-alumno');
+    if (input) input.value = '';
+    document.getElementById('autocomplete-results')?.classList.add('hidden');
 }
 
 function flashScreen() {

@@ -115,6 +115,20 @@ async function getNiveles(turno) {
         return esNumeroConSimbolo || esEPJA;
     });
 
+    // Ordenar niveles: 6°, 7°, 8°, 1°, 2°, 3°, 4°, EPJA
+    const ordenNiveles = { '6': 1, '7': 2, '8': 3, '1': 4, '2': 5, '3': 6, '4': 7 };
+    filtrados.sort((a, b) => {
+        const numA = a.match(/^(\d+)/)?.[1];
+        const numB = b.match(/^(\d+)/)?.[1];
+        const ordA = numA ? (ordenNiveles[numA] || 99) : 99;
+        const ordB = numB ? (ordenNiveles[numB] || 99) : 99;
+        if (ordA !== ordB) return ordA - ordB;
+        // EPJA va al final
+        if (/^EPJA$/i.test(a)) return 1;
+        if (/^EPJA$/i.test(b)) return -1;
+        return a.localeCompare(b);
+    });
+
     console.log('Hojas encontradas:', todos);
     console.log('Hojas filtradas (niveles válidos):', filtrados);
 
@@ -136,6 +150,7 @@ function procesarDatosHoja(values) {
     const alumnosPorCurso = {};
     let filasProcesadas = 0;
     let filasIgnoradas = 0;
+    let cursoActual = null; // Trackea el curso actual para oyentes
 
     // Empezar desde la fila 5 (índice 4) que es donde están los datos
     for (let i = 4; i < values.length; i++) {
@@ -151,34 +166,55 @@ function procesarDatosHoja(values) {
             continue;
         }
 
-        const curso = (row[0] || '').trim();
+        const colA = (row[0] || '').trim();
         const numListaRaw = row[1];
-        const numLista = parseInt(numListaRaw, 10);
+        const numLista = parseInt(String(numListaRaw).trim(), 10);
 
-        // Si no tiene curso o número de lista, saltar
-        if (!curso || isNaN(numLista)) {
+        // Si no tiene contenido en columna A o número de lista inválido, saltar
+        if (!colA || isNaN(numLista)) {
             filasIgnoradas++;
             continue;
+        }
+
+        // Detectar si es OYENTE
+        const esOyente = /^OYENTE/i.test(colA);
+
+        // Determinar el curso asignado
+        let cursoAsignado;
+        if (esOyente) {
+            // Oyente: usar el curso actual (el último curso normal encontrado)
+            if (!cursoActual) {
+                console.log(`Fila ${i + 1}: OYENTE sin curso anterior, ignorando`);
+                filasIgnoradas++;
+                continue;
+            }
+            cursoAsignado = cursoActual;
+            console.log(`Fila ${i + 1}: OYENTE detectado -> asignado a ${cursoAsignado}`);
+        } else {
+            // Curso normal: actualizar cursoActual
+            cursoAsignado = colA;
+            cursoActual = colA;
         }
 
         const run = (row[2] || '').trim();
         const nombre = (row[3] || '').trim();
 
-        // Si no tiene nombre, igual lo registramos (podría ser fila vacía)
+        // Si no tiene nombre, ignorar
         if (!nombre) {
             filasIgnoradas++;
             continue;
         }
 
-        if (!alumnosPorCurso[curso]) {
-            alumnosPorCurso[curso] = [];
+        if (!alumnosPorCurso[cursoAsignado]) {
+            alumnosPorCurso[cursoAsignado] = [];
         }
 
-        alumnosPorCurso[curso].push({
+        alumnosPorCurso[cursoAsignado].push({
             numLista,
             run,
             nombre,
-            rowIndex: i + 1 // 1-based para la API de Sheets
+            rowIndex: i + 1, // 1-based para la API de Sheets
+            esOyente: esOyente
         });
         filasProcesadas++;
     }
@@ -186,7 +222,9 @@ function procesarDatosHoja(values) {
     const cursos = Object.keys(alumnosPorCurso).sort();
     console.log('procesarDatosHoja: filas procesadas:', filasProcesadas, 'ignoradas:', filasIgnoradas, 'cursos:', cursos);
     for (const c of cursos) {
-        console.log(`  Curso ${c}: ${alumnosPorCurso[c].length} alumnos`);
+        const total = alumnosPorCurso[c].length;
+        const oyentes = alumnosPorCurso[c].filter(a => a.esOyente).length;
+        console.log(`  Curso ${c}: ${total} alumnos (${oyentes} oyentes)`);
     }
 
     return { cursos, alumnosPorCurso };

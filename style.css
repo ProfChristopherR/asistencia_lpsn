@@ -887,6 +887,101 @@ body {
     }
 }
 
+/* Autocompletado */
+.autocomplete-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-wrapper input {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    background: #0d1117;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.autocomplete-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background: #161b22;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 6px;
+    margin-top: 0.2rem;
+    max-height: 200px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.2);
+    transition: background 0.15s;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover {
+    background: rgba(88, 166, 255, 0.1);
+}
+
+.autocomplete-item.registrado {
+    opacity: 0.5;
+}
+
+.autocomplete-num {
+    font-weight: 700;
+    color: #58a6ff;
+    min-width: 30px;
+}
+
+.autocomplete-nombre {
+    flex: 1;
+    color: #c9d1d9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.badge-registrado {
+    background: rgba(35, 134, 54, 0.2);
+    color: #3fb950;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.badge-oyente {
+    background: rgba(210, 153, 34, 0.2);
+    color: #d29922;
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.autocomplete-no-results {
+    padding: 0.6rem;
+    font-size: 0.85rem;
+    color: #8b949e;
+    text-align: center;
+}
+
 /* Pizarra transparente para dibujar cuadros ArUco */
 #overlay-canvas {
     position: absolute;

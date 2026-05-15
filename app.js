@@ -139,6 +139,11 @@ function setupEventListeners() {
     elZoomIn?.addEventListener('click', () => adjustZoom(0.5));
     elZoomOut?.addEventListener('click', () => adjustZoom(-0.5));
 
+    // Botón agregar alumno manual
+    document.getElementById('btn-toggle-agregar')?.addEventListener('click', toggleAgregarForm);
+    document.getElementById('input-buscar-alumno')?.addEventListener('input', onBuscarAlumnoInput);
+    document.getElementById('input-buscar-alumno')?.addEventListener('keydown', onBuscarAlumnoKeydown);
+
     // Modal
     elBtnConfirmSend?.addEventListener('click', confirmarEnvio);
     elBtnCancelSend?.addEventListener('click', cerrarModal);
